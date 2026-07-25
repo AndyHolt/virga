@@ -1,0 +1,19 @@
+name: Build and Test
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: 'go.mod'
+          cache-dependency-path: 'go.sum'
+      - run: go build ./...
+      - run: go test -race -cover ./...
+      - uses: golangci/golangci-lint-action@v8
