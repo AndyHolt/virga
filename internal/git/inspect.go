@@ -34,13 +34,17 @@ type WorktreeInfo struct {
 // InspectWorktree determines whether dir is in a main worktree, a linked
 // worktree, or outside a Git worktree. Git must be installed and available on PATH.
 func InspectWorktree(ctx context.Context, dir string) (WorktreeInfo, error) {
+	return inspectWorktree(ctx, output, dir)
+}
+
+func inspectWorktree(ctx context.Context, run outputRunner, dir string) (WorktreeInfo, error) {
 	absoluteDir, err := filepath.Abs(dir)
 	if err != nil {
 		return WorktreeInfo{}, fmt.Errorf("resolve directory %q: %w", dir, err)
 	}
 
 	info := WorktreeInfo{Directory: absoluteDir, Kind: NotWorktree}
-	inside, err := output(ctx, absoluteDir, "rev-parse", "--is-inside-work-tree")
+	inside, err := run(ctx, absoluteDir, "rev-parse", "--is-inside-work-tree")
 	if err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) && bytes.Contains(exitErr.Stderr, []byte("not a git repository")) {
@@ -52,15 +56,15 @@ func InspectWorktree(ctx context.Context, dir string) (WorktreeInfo, error) {
 		return info, nil
 	}
 
-	info.WorktreeRoot, err = gitPath(ctx, absoluteDir, "--show-toplevel")
+	info.WorktreeRoot, err = gitPath(ctx, run, absoluteDir, "--show-toplevel")
 	if err != nil {
 		return WorktreeInfo{}, fmt.Errorf("find worktree root: %w", err)
 	}
-	gitDir, err := gitPath(ctx, absoluteDir, "--git-dir")
+	gitDir, err := gitPath(ctx, run, absoluteDir, "--git-dir")
 	if err != nil {
 		return WorktreeInfo{}, fmt.Errorf("find Git directory: %w", err)
 	}
-	commonDir, err := gitPath(ctx, absoluteDir, "--git-common-dir")
+	commonDir, err := gitPath(ctx, run, absoluteDir, "--git-common-dir")
 	if err != nil {
 		return WorktreeInfo{}, fmt.Errorf("find common Git directory: %w", err)
 	}
@@ -71,7 +75,7 @@ func InspectWorktree(ctx context.Context, dir string) (WorktreeInfo, error) {
 		return info, nil
 	}
 
-	worktrees, err := output(ctx, absoluteDir, "worktree", "list", "--porcelain", "-z")
+	worktrees, err := run(ctx, absoluteDir, "worktree", "list", "--porcelain", "-z")
 	if err != nil {
 		return WorktreeInfo{}, fmt.Errorf("list Git worktrees: %w", err)
 	}
@@ -85,8 +89,8 @@ func InspectWorktree(ctx context.Context, dir string) (WorktreeInfo, error) {
 	return info, nil
 }
 
-func gitPath(ctx context.Context, dir, argument string) (string, error) {
-	commandOutput, err := output(ctx, dir, "rev-parse", "--path-format=absolute", argument)
+func gitPath(ctx context.Context, run outputRunner, dir, argument string) (string, error) {
+	commandOutput, err := run(ctx, dir, "rev-parse", "--path-format=absolute", argument)
 	if err != nil {
 		return "", err
 	}

@@ -9,6 +9,8 @@ import (
 	"os/exec"
 )
 
+type outputRunner func(context.Context, string, ...string) ([]byte, error)
+
 // output runs Git in dir and returns its standard output. Keeping command
 // execution here gives all semantic Git operations consistent locale and error
 // handling without exposing raw command execution to callers.
