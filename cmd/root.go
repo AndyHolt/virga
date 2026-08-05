@@ -12,6 +12,10 @@ import (
 
 // NewRootCommand constructs the root Virga command.
 func NewRootCommand() *cobra.Command {
+	return newRootCommand(os.Getwd, git.InspectWorktree, git.CreateWorktree)
+}
+
+func newRootCommand(getwd func() (string, error), inspect directoryInspector, create worktreeCreator) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "virga",
 		Short: "Multi-branch development manager",
@@ -20,7 +24,7 @@ func NewRootCommand() *cobra.Command {
 			return command.Help()
 		},
 	}
-	command.AddCommand(newInfoCmd(os.Getwd, git.InspectWorktree))
+	command.AddCommand(newInfoCmd(getwd, inspect), newWorktreeCmd(getwd, create))
 
 	return command
 }
