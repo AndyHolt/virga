@@ -3,8 +3,14 @@ Copyright © 2026 Andy Holt <andrew.holt@hotmail.co.uk>
 */
 package main
 
-import "github.com/AndyHolt/virga/cmd"
+import (
+	"os"
+
+	"github.com/AndyHolt/virga/cmd"
+)
 
 func main() {
-	cmd.Execute()
+	if err := cmd.Execute(); err != nil {
+		os.Exit(1)
+	}
 }

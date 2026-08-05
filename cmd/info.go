@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/AndyHolt/virga/internal/git"
 	"github.com/spf13/cobra"
@@ -49,8 +48,4 @@ func newInfoCmd(getwd func() (string, error), inspect directoryInspector) *cobra
 			return nil
 		},
 	}
-}
-
-func init() {
-	rootCmd.AddCommand(newInfoCmd(os.Getwd, git.InspectWorktree))
 }
