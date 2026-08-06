@@ -14,13 +14,75 @@ func TestCreateWorktree(t *testing.T) {
 	mainRoot := newTestRepository(t, "repository")
 	baseCommit := gitOutput(t, "-C", mainRoot, "rev-parse", "HEAD")
 
-	destination, err := CreateWorktree(context.Background(), mainRoot, "feature")
+	destination, err := CreateWorktree(context.Background(), mainRoot, "feature", "")
 	if err != nil {
 		t.Fatalf("CreateWorktree() error = %v", err)
 	}
 
 	wantDestination := worktreeDestination(mainRoot, "feature")
 	assertWorktreeCreated(t, mainRoot, destination, wantDestination, "feature", baseCommit)
+}
+
+func TestCreateWorktreeFromLocalBranch(t *testing.T) {
+	mainRoot := newTestRepository(t, "repository")
+	releaseCommit := gitOutput(t, "-C", mainRoot, "rev-parse", "HEAD")
+	runGit(t, "-C", mainRoot, "commit", "--allow-empty", "-m", "main commit")
+	mainCommit := gitOutput(t, "-C", mainRoot, "rev-parse", "HEAD")
+	runGit(t, "-C", mainRoot, "branch", "release", releaseCommit)
+	runGit(t, "-C", mainRoot, "tag", "release", mainCommit)
+
+	tests := []struct {
+		name       string
+		branch     string
+		baseBranch string
+		baseCommit string
+	}{
+		{
+			name:       "named branch",
+			branch:     "from-release",
+			baseBranch: "release",
+			baseCommit: releaseCommit,
+		},
+		{
+			name:       "main branch",
+			branch:     "from-main",
+			baseBranch: "main",
+			baseCommit: mainCommit,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			destination, err := CreateWorktree(context.Background(), mainRoot, test.branch, test.baseBranch)
+			if err != nil {
+				t.Fatalf("CreateWorktree() error = %v", err)
+			}
+
+			assertWorktreeCreated(
+				t,
+				mainRoot,
+				destination,
+				worktreeDestination(mainRoot, test.branch),
+				test.branch,
+				test.baseCommit,
+			)
+		})
+	}
+}
+
+func TestCreateWorktreeFromRejectsMissingLocalBranch(t *testing.T) {
+	mainRoot := newTestRepository(t, "repository")
+
+	_, err := CreateWorktree(context.Background(), mainRoot, "feature", "does-not-exist")
+	if err == nil || !strings.Contains(err.Error(), `local base branch "does-not-exist" does not exist`) {
+		t.Fatalf("CreateWorktree() error = %v, want missing base branch error", err)
+	}
+	if localBranchExists(t, mainRoot, "feature") {
+		t.Error("branch was created despite missing base branch")
+	}
+	if _, err := os.Lstat(worktreeDestination(mainRoot, "feature")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("destination error = %v, want not exist", err)
+	}
 }
 
 func TestCreateWorktreeFromNestedDirectoryWithSpaces(t *testing.T) {
@@ -31,7 +93,7 @@ func TestCreateWorktreeFromNestedDirectoryWithSpaces(t *testing.T) {
 	}
 	baseCommit := gitOutput(t, "-C", mainRoot, "rev-parse", "HEAD")
 
-	destination, err := CreateWorktree(context.Background(), nested, "feature/login")
+	destination, err := CreateWorktree(context.Background(), nested, "feature/login", "")
 	if err != nil {
 		t.Fatalf("CreateWorktree() error = %v", err)
 	}
@@ -47,7 +109,7 @@ func TestCreateWorktreeFromLinkedWorktree(t *testing.T) {
 	runGit(t, "-C", linkedRoot, "commit", "--allow-empty", "-m", "source commit")
 	baseCommit := gitOutput(t, "-C", linkedRoot, "rev-parse", "HEAD")
 
-	destination, err := CreateWorktree(context.Background(), linkedRoot, "from-linked")
+	destination, err := CreateWorktree(context.Background(), linkedRoot, "from-linked", "")
 	if err != nil {
 		t.Fatalf("CreateWorktree() error = %v", err)
 	}
@@ -61,7 +123,7 @@ func TestCreateWorktreeRejectsConflicts(t *testing.T) {
 		mainRoot := newTestRepository(t, "repository")
 		runGit(t, "-C", mainRoot, "branch", "existing")
 
-		_, err := CreateWorktree(context.Background(), mainRoot, "existing")
+		_, err := CreateWorktree(context.Background(), mainRoot, "existing", "")
 		if err == nil || !strings.Contains(err.Error(), `local branch "existing" already exists`) {
 			t.Fatalf("CreateWorktree() error = %v, want existing branch error", err)
 		}
@@ -74,7 +136,7 @@ func TestCreateWorktreeRejectsConflicts(t *testing.T) {
 			t.Fatalf("create conflicting destination: %v", err)
 		}
 
-		_, err := CreateWorktree(context.Background(), mainRoot, "blocked")
+		_, err := CreateWorktree(context.Background(), mainRoot, "blocked", "")
 		if err == nil || !strings.Contains(err.Error(), "destination") || !strings.Contains(err.Error(), "already exists") {
 			t.Fatalf("CreateWorktree() error = %v, want existing destination error", err)
 		}
@@ -87,7 +149,7 @@ func TestCreateWorktreeRejectsConflicts(t *testing.T) {
 func TestCreateWorktreeRejectsInvalidBranch(t *testing.T) {
 	mainRoot := newTestRepository(t, "repository")
 
-	_, err := CreateWorktree(context.Background(), mainRoot, "invalid branch")
+	_, err := CreateWorktree(context.Background(), mainRoot, "invalid branch", "")
 	if err == nil || !strings.Contains(err.Error(), `validate branch "invalid branch"`) {
 		t.Fatalf("CreateWorktree() error = %v, want invalid branch error", err)
 	}
@@ -97,7 +159,7 @@ func TestCreateWorktreeRejectsDetachedHEAD(t *testing.T) {
 	mainRoot := newTestRepository(t, "repository")
 	runGit(t, "-C", mainRoot, "checkout", "--detach")
 
-	_, err := CreateWorktree(context.Background(), mainRoot, "feature")
+	_, err := CreateWorktree(context.Background(), mainRoot, "feature", "")
 	if err == nil || !strings.Contains(err.Error(), "HEAD is detached") {
 		t.Fatalf("CreateWorktree() error = %v, want detached HEAD error", err)
 	}
@@ -108,7 +170,7 @@ func TestCreateWorktreeRejectsBareRepository(t *testing.T) {
 	bareRoot := filepath.Join(t.TempDir(), "bare repository")
 	runGit(t, "init", "--bare", bareRoot)
 
-	_, err := CreateWorktree(context.Background(), bareRoot, "feature")
+	_, err := CreateWorktree(context.Background(), bareRoot, "feature", "")
 	if err == nil || !strings.Contains(err.Error(), "repository") || !strings.Contains(err.Error(), "is bare") {
 		t.Fatalf("CreateWorktree() error = %v, want bare repository error", err)
 	}
@@ -124,7 +186,7 @@ func TestCreateWorktreeReturnsGitAddFailure(t *testing.T) {
 		return output(ctx, dir, arguments...)
 	}
 
-	destination, err := createWorktree(context.Background(), mainRoot, "feature", run)
+	destination, err := createWorktree(context.Background(), mainRoot, "feature", "", run)
 	if destination != "" {
 		t.Errorf("destination = %q, want empty", destination)
 	}
