@@ -10,14 +10,14 @@ import (
 	"strings"
 )
 
-// CreateWorktree creates branch from the currently checked-out branch and adds
-// a linked worktree beside the primary repository. It returns the absolute path
-// to the new worktree.
-func CreateWorktree(ctx context.Context, dir, branch string) (string, error) {
-	return createWorktree(ctx, dir, branch, output)
+// CreateWorktree creates branch from baseBranch and adds a linked worktree
+// beside the primary repository. An empty baseBranch uses the currently
+// checked-out branch. It returns the absolute path to the new worktree.
+func CreateWorktree(ctx context.Context, dir, branch, baseBranch string) (string, error) {
+	return createWorktree(ctx, dir, branch, baseBranch, output)
 }
 
-func createWorktree(ctx context.Context, dir, branch string, run outputRunner) (string, error) {
+func createWorktree(ctx context.Context, dir, branch, baseBranch string, run outputRunner) (string, error) {
 	bareOutput, err := run(ctx, dir, "rev-parse", "--is-bare-repository")
 	if err != nil {
 		return "", fmt.Errorf("check whether %q is a bare Git repository: %w", dir, err)
@@ -38,16 +38,9 @@ func createWorktree(ctx context.Context, dir, branch string, run outputRunner) (
 		return "", fmt.Errorf("create worktree: %q is not inside a Git worktree", dir)
 	}
 
-	branchOutput, err := run(ctx, info.WorktreeRoot, "symbolic-ref", "--quiet", "--short", "HEAD")
+	baseRef, err := localBaseRef(ctx, run, info.WorktreeRoot, branch, baseBranch)
 	if err != nil {
-		if hasExitCode(err, 1) {
-			return "", fmt.Errorf("create worktree: HEAD is detached; check out a branch before creating %q", branch)
-		}
-		return "", fmt.Errorf("read currently checked-out branch: %w", err)
-	}
-	currentBranch := strings.TrimSpace(string(branchOutput))
-	if currentBranch == "" {
-		return "", fmt.Errorf("create worktree: HEAD is detached; check out a branch before creating %q", branch)
+		return "", err
 	}
 
 	if _, err := run(ctx, info.WorktreeRoot, "check-ref-format", "--branch", branch); err != nil {
@@ -68,7 +61,6 @@ func createWorktree(ctx context.Context, dir, branch string, run outputRunner) (
 		return "", fmt.Errorf("check worktree destination %q: %w", destination, err)
 	}
 
-	baseRef := "refs/heads/" + currentBranch
 	if _, err := run(
 		ctx,
 		info.WorktreeRoot,
@@ -78,6 +70,32 @@ func createWorktree(ctx context.Context, dir, branch string, run outputRunner) (
 	}
 
 	return destination, nil
+}
+
+func localBaseRef(ctx context.Context, run outputRunner, directory, newBranch, baseBranch string) (string, error) {
+	if baseBranch != "" {
+		baseRef := "refs/heads/" + baseBranch
+		if _, err := run(ctx, directory, "show-ref", "--verify", "--quiet", baseRef); err != nil {
+			if hasExitCode(err, 1) {
+				return "", fmt.Errorf("create worktree: local base branch %q does not exist", baseBranch)
+			}
+			return "", fmt.Errorf("check whether base branch %q exists: %w", baseBranch, err)
+		}
+		return baseRef, nil
+	}
+
+	branchOutput, err := run(ctx, directory, "symbolic-ref", "--quiet", "--short", "HEAD")
+	if err != nil {
+		if hasExitCode(err, 1) {
+			return "", fmt.Errorf("create worktree: HEAD is detached; check out a branch before creating %q", newBranch)
+		}
+		return "", fmt.Errorf("read currently checked-out branch: %w", err)
+	}
+	currentBranch := strings.TrimSpace(string(branchOutput))
+	if currentBranch == "" {
+		return "", fmt.Errorf("create worktree: HEAD is detached; check out a branch before creating %q", newBranch)
+	}
+	return "refs/heads/" + currentBranch, nil
 }
 
 func worktreeDestination(primaryRoot, branch string) string {
