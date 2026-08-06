@@ -10,7 +10,10 @@ import (
 
 type branchSelector func(io.Reader, io.Writer, []string) (string, error)
 
-const terminalAccent lipgloss.ANSIColor = 4
+const (
+	terminalAccent lipgloss.ANSIColor = 4
+	terminalMuted  lipgloss.ANSIColor = 8
+)
 
 func selectHuhBranch(input io.Reader, prompt io.Writer, branches []string) (string, error) {
 	if len(branches) == 0 {
@@ -32,8 +35,8 @@ func selectHuhBranch(input io.Reader, prompt io.Writer, branches []string) (stri
 	return selected, nil
 }
 
-// branchSelectorTheme uses terminal-default colors for text and the terminal's
-// ANSI blue palette entry as an accent, so it remains legible across themes.
+// branchSelectorTheme uses terminal-default colors for text, with ANSI palette
+// entries for its accent and muted help text, so it remains legible across themes.
 func branchSelectorTheme() *huh.Theme {
 	theme := huh.ThemeBase()
 	theme.Focused.Base = theme.Focused.Base.BorderForeground(terminalAccent)
@@ -45,12 +48,12 @@ func branchSelectorTheme() *huh.Theme {
 	theme.Focused.SelectedOption = lipgloss.NewStyle().Bold(true).Reverse(true)
 	theme.Focused.UnselectedOption = lipgloss.NewStyle()
 
-	theme.Help.Ellipsis = lipgloss.NewStyle()
+	theme.Help.Ellipsis = lipgloss.NewStyle().Foreground(terminalMuted)
 	theme.Help.ShortKey = lipgloss.NewStyle().Bold(true).Foreground(terminalAccent)
-	theme.Help.ShortDesc = lipgloss.NewStyle()
-	theme.Help.ShortSeparator = lipgloss.NewStyle()
+	theme.Help.ShortDesc = lipgloss.NewStyle().Foreground(terminalMuted)
+	theme.Help.ShortSeparator = lipgloss.NewStyle().Foreground(terminalMuted)
 	theme.Help.FullKey = lipgloss.NewStyle().Bold(true).Foreground(terminalAccent)
-	theme.Help.FullDesc = lipgloss.NewStyle()
-	theme.Help.FullSeparator = lipgloss.NewStyle()
+	theme.Help.FullDesc = lipgloss.NewStyle().Foreground(terminalMuted)
+	theme.Help.FullSeparator = lipgloss.NewStyle().Foreground(terminalMuted)
 	return theme
 }

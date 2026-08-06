@@ -8,30 +8,25 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-func TestBranchSelectorThemeUsesTerminalDefaultsAndANSIAccent(t *testing.T) {
+func TestBranchSelectorThemeUsesTerminalDefaultsAndANSIColors(t *testing.T) {
 	theme := branchSelectorTheme()
-	for _, style := range []lipgloss.Style{
-		theme.Focused.UnselectedOption,
-		theme.Help.Ellipsis,
-		theme.Help.ShortDesc,
-		theme.Help.ShortSeparator,
-		theme.Help.FullDesc,
-		theme.Help.FullSeparator,
-	} {
-		if _, ok := style.GetForeground().(lipgloss.NoColor); !ok {
-			t.Errorf("foreground = %T, want terminal default", style.GetForeground())
-		}
-	}
+	assertTerminalDefault(t, theme.Focused.UnselectedOption)
 	for _, style := range []lipgloss.Style{
 		theme.Focused.Title,
 		theme.Focused.SelectSelector,
 		theme.Help.ShortKey,
 		theme.Help.FullKey,
 	} {
-		color, ok := style.GetForeground().(lipgloss.ANSIColor)
-		if !ok || color != terminalAccent {
-			t.Errorf("foreground = %v, want ANSI color %d", style.GetForeground(), terminalAccent)
-		}
+		assertANSIColor(t, style, terminalAccent)
+	}
+	for _, style := range []lipgloss.Style{
+		theme.Help.Ellipsis,
+		theme.Help.ShortDesc,
+		theme.Help.ShortSeparator,
+		theme.Help.FullDesc,
+		theme.Help.FullSeparator,
+	} {
+		assertANSIColor(t, style, terminalMuted)
 	}
 	borderColor := theme.Focused.Base.GetBorderLeftForeground()
 	if color, ok := borderColor.(lipgloss.ANSIColor); !ok || color != terminalAccent {
@@ -39,6 +34,21 @@ func TestBranchSelectorThemeUsesTerminalDefaultsAndANSIAccent(t *testing.T) {
 	}
 	if !theme.Focused.SelectedOption.GetReverse() {
 		t.Error("selected option is not reverse video")
+	}
+}
+
+func assertTerminalDefault(t *testing.T, style lipgloss.Style) {
+	t.Helper()
+	if _, ok := style.GetForeground().(lipgloss.NoColor); !ok {
+		t.Errorf("foreground = %T, want terminal default", style.GetForeground())
+	}
+}
+
+func assertANSIColor(t *testing.T, style lipgloss.Style, want lipgloss.ANSIColor) {
+	t.Helper()
+	color, ok := style.GetForeground().(lipgloss.ANSIColor)
+	if !ok || color != want {
+		t.Errorf("foreground = %v, want ANSI color %d", style.GetForeground(), want)
 	}
 }
 
