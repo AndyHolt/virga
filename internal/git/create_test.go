@@ -74,8 +74,15 @@ func TestCreateWorktreeFromRejectsMissingLocalBranch(t *testing.T) {
 	mainRoot := newTestRepository(t, "repository")
 
 	_, err := CreateWorktree(context.Background(), mainRoot, "feature", "does-not-exist")
-	if err == nil || !strings.Contains(err.Error(), `local base branch "does-not-exist" does not exist`) {
+	var missingBaseBranch *LocalBaseBranchNotFoundError
+	if !errors.As(err, &missingBaseBranch) {
 		t.Fatalf("CreateWorktree() error = %v, want missing base branch error", err)
+	}
+	if got, want := missingBaseBranch.Branch, "does-not-exist"; got != want {
+		t.Errorf("missing base branch = %q, want %q", got, want)
+	}
+	if got, want := err.Error(), `local base branch "does-not-exist" does not exist`; got != want {
+		t.Errorf("error = %q, want %q", got, want)
 	}
 	if localBranchExists(t, mainRoot, "feature") {
 		t.Error("branch was created despite missing base branch")
@@ -124,8 +131,15 @@ func TestCreateWorktreeRejectsConflicts(t *testing.T) {
 		runGit(t, "-C", mainRoot, "branch", "existing")
 
 		_, err := CreateWorktree(context.Background(), mainRoot, "existing", "")
-		if err == nil || !strings.Contains(err.Error(), `local branch "existing" already exists`) {
+		var existingBranch *LocalBranchExistsError
+		if !errors.As(err, &existingBranch) {
 			t.Fatalf("CreateWorktree() error = %v, want existing branch error", err)
+		}
+		if got, want := existingBranch.Branch, "existing"; got != want {
+			t.Errorf("existing branch = %q, want %q", got, want)
+		}
+		if got, want := err.Error(), `local branch "existing" already exists`; got != want {
+			t.Errorf("error = %q, want %q", got, want)
 		}
 	})
 
@@ -162,6 +176,18 @@ func TestCreateWorktreeRejectsDetachedHEAD(t *testing.T) {
 	_, err := CreateWorktree(context.Background(), mainRoot, "feature", "")
 	if err == nil || !strings.Contains(err.Error(), "HEAD is detached") {
 		t.Fatalf("CreateWorktree() error = %v, want detached HEAD error", err)
+	}
+}
+
+func TestCreateWorktreeRejectsNonGitRepository(t *testing.T) {
+	isolateGitConfiguration(t)
+
+	_, err := CreateWorktree(context.Background(), t.TempDir(), "feature", "")
+	if !errors.Is(err, ErrNotGitRepository) {
+		t.Fatalf("CreateWorktree() error = %v, want %v", err, ErrNotGitRepository)
+	}
+	if got, want := err.Error(), ErrNotGitRepository.Error(); got != want {
+		t.Errorf("error = %q, want %q", got, want)
 	}
 }
 

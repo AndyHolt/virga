@@ -23,6 +23,21 @@ func TestListLocalBranches(t *testing.T) {
 	}
 }
 
+func TestListLocalBranchesRejectsNonGitRepository(t *testing.T) {
+	isolateGitConfiguration(t)
+
+	branches, err := ListLocalBranches(context.Background(), t.TempDir())
+	if branches != nil {
+		t.Errorf("branches = %q, want nil", branches)
+	}
+	if !errors.Is(err, ErrNotGitRepository) {
+		t.Fatalf("ListLocalBranches() error = %v, want %v", err, ErrNotGitRepository)
+	}
+	if got, want := err.Error(), ErrNotGitRepository.Error(); got != want {
+		t.Errorf("error = %q, want %q", got, want)
+	}
+}
+
 func TestListLocalBranchesReturnsGitError(t *testing.T) {
 	gitErr := errors.New("for-each-ref failed")
 	branches, err := listLocalBranches(
@@ -31,16 +46,20 @@ func TestListLocalBranchesReturnsGitError(t *testing.T) {
 			if directory != "/repository" {
 				t.Errorf("directory = %q, want /repository", directory)
 			}
-			wantArguments := []string{
+			switch {
+			case reflect.DeepEqual(arguments, []string{"rev-parse", "--git-dir"}):
+				return []byte(".git\n"), nil
+			case reflect.DeepEqual(arguments, []string{
 				"for-each-ref",
 				"--sort=refname",
 				"--format=%(refname:short)%00",
 				"refs/heads/",
+			}):
+				return nil, gitErr
+			default:
+				t.Errorf("arguments = %q, want a repository or branch-listing command", arguments)
+				return nil, errors.New("unexpected Git command")
 			}
-			if !reflect.DeepEqual(arguments, wantArguments) {
-				t.Errorf("arguments = %q, want %q", arguments, wantArguments)
-			}
-			return nil, gitErr
 		},
 		"/repository",
 	)

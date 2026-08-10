@@ -10,6 +10,25 @@ import (
 	"strings"
 )
 
+// LocalBaseBranchNotFoundError reports a requested local base branch that does
+// not exist.
+type LocalBaseBranchNotFoundError struct {
+	Branch string
+}
+
+func (err *LocalBaseBranchNotFoundError) Error() string {
+	return fmt.Sprintf("local base branch %q does not exist", err.Branch)
+}
+
+// LocalBranchExistsError reports a local branch that already exists.
+type LocalBranchExistsError struct {
+	Branch string
+}
+
+func (err *LocalBranchExistsError) Error() string {
+	return fmt.Sprintf("local branch %q already exists", err.Branch)
+}
+
 // CreateWorktree creates branch from baseBranch and adds a linked worktree
 // beside the primary repository. An empty baseBranch uses the currently
 // checked-out branch. It returns the absolute path to the new worktree.
@@ -20,6 +39,9 @@ func CreateWorktree(ctx context.Context, dir, branch, baseBranch string) (string
 func createWorktree(ctx context.Context, dir, branch, baseBranch string, run outputRunner) (string, error) {
 	bareOutput, err := run(ctx, dir, "rev-parse", "--is-bare-repository")
 	if err != nil {
+		if isNotGitRepository(err) {
+			return "", ErrNotGitRepository
+		}
 		return "", fmt.Errorf("check whether %q is a bare Git repository: %w", dir, err)
 	}
 	switch strings.TrimSpace(string(bareOutput)) {
@@ -49,7 +71,7 @@ func createWorktree(ctx context.Context, dir, branch, baseBranch string, run out
 
 	branchRef := "refs/heads/" + branch
 	if _, err := run(ctx, info.WorktreeRoot, "show-ref", "--verify", "--quiet", branchRef); err == nil {
-		return "", fmt.Errorf("create worktree: local branch %q already exists", branch)
+		return "", &LocalBranchExistsError{Branch: branch}
 	} else if !hasExitCode(err, 1) {
 		return "", fmt.Errorf("check whether branch %q exists: %w", branch, err)
 	}
@@ -77,7 +99,7 @@ func localBaseRef(ctx context.Context, run outputRunner, directory, newBranch, b
 		baseRef := "refs/heads/" + baseBranch
 		if _, err := run(ctx, directory, "show-ref", "--verify", "--quiet", baseRef); err != nil {
 			if hasExitCode(err, 1) {
-				return "", fmt.Errorf("create worktree: local base branch %q does not exist", baseBranch)
+				return "", &LocalBaseBranchNotFoundError{Branch: baseBranch}
 			}
 			return "", fmt.Errorf("check whether base branch %q exists: %w", baseBranch, err)
 		}

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os/exec"
 	"path/filepath"
@@ -86,6 +87,119 @@ func TestNewWorktreeCommandCreatesFromSelectedBaseBranch(t *testing.T) {
 				t.Errorf("worktree commit = %q, want %q", got, test.baseCommit)
 			}
 		})
+	}
+}
+
+func TestNewWorktreeCommandReportsNonGitRepository(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+
+	for _, test := range []struct {
+		name          string
+		args          []string
+		isInteractive bool
+	}{
+		{name: "default base branch", args: []string{"new", "feature"}},
+		{name: "selected base branch", args: []string{"new", "feature", "--pick"}, isInteractive: true},
+		{name: "selected base branch in a non-interactive terminal", args: []string{"new", "feature", "--pick"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var stderr bytes.Buffer
+			command := newRootCommand(
+				func() (string, error) { return t.TempDir(), nil },
+				git.InspectWorktree,
+				git.CreateWorktree,
+				newWorktreeOptions{
+					listBranches:  git.ListLocalBranches,
+					isInteractive: func() bool { return test.isInteractive },
+					selectBranch: func(io.Reader, io.Writer, []string) (string, error) {
+						t.Fatal("selector called outside a Git repository")
+						return "", nil
+					},
+				},
+			)
+			command.SetErr(&stderr)
+			command.SetArgs(test.args)
+
+			err := command.Execute()
+			if !errors.Is(err, git.ErrNotGitRepository) {
+				t.Fatalf("Execute() error = %v, want %v", err, git.ErrNotGitRepository)
+			}
+			if got, want := stderr.String(), "Error: not in a Git repository\n"; got != want {
+				t.Errorf("stderr = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestNewWorktreeCommandReportsMissingBaseBranch(t *testing.T) {
+	root := newCLITestRepository(t)
+	var stderr bytes.Buffer
+	command := newRootCommand(
+		func() (string, error) { return root, nil },
+		git.InspectWorktree,
+		git.CreateWorktree,
+		newWorktreeOptions{},
+	)
+	command.SetOut(&stderr)
+	command.SetErr(&stderr)
+	command.SetArgs([]string{"new", "feature", "--from", "not-a-branch"})
+
+	err := command.Execute()
+	var missingBaseBranch *git.LocalBaseBranchNotFoundError
+	if !errors.As(err, &missingBaseBranch) {
+		t.Fatalf("Execute() error = %v, want missing base branch error", err)
+	}
+	if got, want := missingBaseBranch.Branch, "not-a-branch"; got != want {
+		t.Errorf("missing base branch = %q, want %q", got, want)
+	}
+
+	output := stderr.String()
+	if want := "Error: local base branch \"not-a-branch\" does not exist\n"; !strings.HasPrefix(output, want) {
+		t.Errorf("stderr = %q, want prefix %q", output, want)
+	}
+	if !strings.Contains(output, "Usage:") {
+		t.Errorf("stderr = %q, want command usage", output)
+	}
+	if strings.Contains(output, "create worktree") {
+		t.Errorf("stderr = %q, contains implementation detail", output)
+	}
+}
+
+func TestNewWorktreeCommandReportsExistingBranch(t *testing.T) {
+	root := newCLITestRepository(t)
+	cliRunGit(t, "-C", root, "branch", "existing")
+
+	var output bytes.Buffer
+	command := newRootCommand(
+		func() (string, error) { return root, nil },
+		git.InspectWorktree,
+		git.CreateWorktree,
+		newWorktreeOptions{},
+	)
+	command.SetOut(&output)
+	command.SetErr(&output)
+	command.SetArgs([]string{"new", "existing"})
+
+	err := command.Execute()
+	var existingBranch *git.LocalBranchExistsError
+	if !errors.As(err, &existingBranch) {
+		t.Fatalf("Execute() error = %v, want existing branch error", err)
+	}
+	if got, want := existingBranch.Branch, "existing"; got != want {
+		t.Errorf("existing branch = %q, want %q", got, want)
+	}
+
+	got := output.String()
+	if want := "Error: local branch \"existing\" already exists\n"; !strings.HasPrefix(got, want) {
+		t.Errorf("output = %q, want prefix %q", got, want)
+	}
+	if !strings.Contains(got, "Usage:") {
+		t.Errorf("output = %q, want command usage", got)
+	}
+	if strings.Contains(got, "create worktree") {
+		t.Errorf("output = %q, contains implementation detail", got)
 	}
 }
 
