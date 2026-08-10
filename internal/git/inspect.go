@@ -14,6 +14,9 @@ import (
 // WorktreeKind identifies how a directory relates to a Git worktree.
 type WorktreeKind string
 
+// ErrNotGitRepository indicates that an operation requires a Git repository.
+var ErrNotGitRepository = errors.New("not in a Git repository")
+
 const (
 	// NotWorktree means the directory is not inside a Git worktree.
 	NotWorktree WorktreeKind = "not-worktree"
@@ -46,8 +49,7 @@ func inspectWorktree(ctx context.Context, run outputRunner, dir string) (Worktre
 	info := WorktreeInfo{Directory: absoluteDir, Kind: NotWorktree}
 	inside, err := run(ctx, absoluteDir, "rev-parse", "--is-inside-work-tree")
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && bytes.Contains(exitErr.Stderr, []byte("not a git repository")) {
+		if isNotGitRepository(err) {
 			return info, nil
 		}
 		return WorktreeInfo{}, fmt.Errorf("check Git worktree: %w", err)
@@ -87,6 +89,11 @@ func inspectWorktree(ctx context.Context, run outputRunner, dir string) (Worktre
 	info.Kind = LinkedWorktree
 	info.MainWorktreeRoot = mainRoot
 	return info, nil
+}
+
+func isNotGitRepository(err error) bool {
+	var exitErr *exec.ExitError
+	return errors.As(err, &exitErr) && bytes.Contains(exitErr.Stderr, []byte("not a git repository"))
 }
 
 func gitPath(ctx context.Context, run outputRunner, dir, argument string) (string, error) {

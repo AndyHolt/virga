@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/AndyHolt/virga/internal/git"
 	"github.com/spf13/cobra"
 )
 
@@ -35,13 +37,8 @@ func newWorktreeCmd(getwd func() (string, error), create worktreeCreator, option
 			if fromSet && baseBranch == "" {
 				return fmt.Errorf("--from requires a local branch")
 			}
-			if pickBase {
-				if options.isInteractive == nil || !options.isInteractive() {
-					return fmt.Errorf("--pick requires an interactive terminal")
-				}
-				if options.listBranches == nil || options.selectBranch == nil {
-					return fmt.Errorf("interactive branch selection is unavailable")
-				}
+			if pickBase && (options.listBranches == nil || options.selectBranch == nil) {
+				return fmt.Errorf("interactive branch selection is unavailable")
 			}
 
 			directory, err := getwd()
@@ -56,7 +53,10 @@ func newWorktreeCmd(getwd func() (string, error), create worktreeCreator, option
 			case pickBase:
 				branches, err := options.listBranches(cmd.Context(), directory)
 				if err != nil {
-					return fmt.Errorf("list local branches: %w", err)
+					return newWorktreeCommandError(cmd, "list local branches", err)
+				}
+				if options.isInteractive == nil || !options.isInteractive() {
+					return fmt.Errorf("--pick requires an interactive terminal")
 				}
 				selectedBase, err = options.selectBranch(cmd.InOrStdin(), cmd.ErrOrStderr(), branches)
 				if err != nil {
@@ -66,7 +66,7 @@ func newWorktreeCmd(getwd func() (string, error), create worktreeCreator, option
 
 			worktree, err := create(cmd.Context(), directory, args[0], selectedBase)
 			if err != nil {
-				return fmt.Errorf("create worktree: %w", err)
+				return newWorktreeCommandError(cmd, "create worktree", err)
 			}
 			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Branch: %s\nWorktree: %s\n", args[0], worktree); err != nil {
 				return fmt.Errorf("write worktree result: %w", err)
@@ -78,4 +78,22 @@ func newWorktreeCmd(getwd func() (string, error), create worktreeCreator, option
 	command.Flags().BoolVar(&useMain, "main", false, "Create from the local main branch")
 	command.Flags().BoolVar(&pickBase, "pick", false, "Interactively select a local base branch")
 	return command
+}
+
+func newWorktreeCommandError(cmd *cobra.Command, operation string, err error) error {
+	if errors.Is(err, git.ErrNotGitRepository) {
+		cmd.SilenceUsage = true
+		return git.ErrNotGitRepository
+	}
+
+	var missingBaseBranch *git.LocalBaseBranchNotFoundError
+	if errors.As(err, &missingBaseBranch) {
+		return missingBaseBranch
+	}
+
+	var existingBranch *git.LocalBranchExistsError
+	if errors.As(err, &existingBranch) {
+		return existingBranch
+	}
+	return fmt.Errorf("%s: %w", operation, err)
 }

@@ -13,6 +13,13 @@ func ListLocalBranches(ctx context.Context, dir string) ([]string, error) {
 }
 
 func listLocalBranches(ctx context.Context, run outputRunner, dir string) ([]string, error) {
+	if _, err := run(ctx, dir, "rev-parse", "--git-dir"); err != nil {
+		if isNotGitRepository(err) {
+			return nil, ErrNotGitRepository
+		}
+		return nil, fmt.Errorf("check Git repository: %w", err)
+	}
+
 	branchOutput, err := run(
 		ctx,
 		dir,
@@ -22,6 +29,9 @@ func listLocalBranches(ctx context.Context, run outputRunner, dir string) ([]str
 		"refs/heads/",
 	)
 	if err != nil {
+		if isNotGitRepository(err) {
+			return nil, ErrNotGitRepository
+		}
 		return nil, fmt.Errorf("list local branches: %w", err)
 	}
 

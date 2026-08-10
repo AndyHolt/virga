@@ -163,18 +163,17 @@ func TestNewWorktreeCommandReturnsPickErrors(t *testing.T) {
 
 func TestNewWorktreeCommandRejectsNonInteractivePick(t *testing.T) {
 	command := newWorktreeCmd(
-		func() (string, error) {
-			t.Fatal("getwd called without an interactive terminal")
-			return "", nil
-		},
+		func() (string, error) { return "/repo", nil },
 		func(context.Context, string, string, string) (string, error) {
 			t.Fatal("creator called without an interactive terminal")
 			return "", nil
 		},
 		newWorktreeOptions{
-			listBranches: func(context.Context, string) ([]string, error) {
-				t.Fatal("branch lister called without an interactive terminal")
-				return nil, nil
+			listBranches: func(_ context.Context, directory string) ([]string, error) {
+				if directory != "/repo" {
+					t.Errorf("directory = %q, want /repo", directory)
+				}
+				return []string{"main"}, nil
 			},
 			isInteractive: func() bool { return false },
 			selectBranch: func(io.Reader, io.Writer, []string) (string, error) {
