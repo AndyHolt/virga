@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/AndyHolt/virga/internal/files"
 	"github.com/AndyHolt/virga/internal/git"
 	"gopkg.in/yaml.v3"
 )
@@ -20,7 +21,8 @@ const environmentConfigPath = "VIRGA_CONFIG"
 
 // Config is Virga's configuration.
 type Config struct {
-	Tmux TmuxConfig
+	Tmux  TmuxConfig
+	Files []files.Entry
 }
 
 // Inspector finds the Git worktree containing a directory.
@@ -87,9 +89,9 @@ type configSource struct {
 
 // Load reads configuration for dir. User configuration is loaded first,
 // followed by .virga.yaml at the primary worktree root, a VIRGA_CONFIG file,
-// and explicitPath. Later sources replace earlier tmux configuration. User and
-// repository configuration files are optional; VIRGA_CONFIG and explicitPath
-// must name files that exist.
+// and explicitPath. Later sources replace earlier tmux and files
+// configuration. User and repository configuration files are optional;
+// VIRGA_CONFIG and explicitPath must name files that exist.
 func (loader Loader) Load(ctx context.Context, dir, explicitPath string) (Config, error) {
 	userPath, err := loader.userConfigPath()
 	if err != nil {
@@ -209,10 +211,27 @@ func mergeRawConfig(base *rawConfig, overlay rawConfig) {
 	if overlay.Tmux != nil {
 		base.Tmux = overlay.Tmux
 	}
+	if overlay.Files != nil {
+		base.Files = overlay.Files
+	}
 }
 
 func validate(raw rawConfig) (Config, error) {
 	var configuration Config
+	if raw.Files != nil {
+		configuration.Files = make([]files.Entry, len(*raw.Files))
+		for index, entry := range *raw.Files {
+			if entry.Source == "" {
+				return Config{}, fmt.Errorf("validate files[%d]: source is required", index)
+			}
+			mode := files.Mode(strings.TrimSpace(entry.Mode))
+			if mode != files.ModeCopy && mode != files.ModeSymlink {
+				return Config{}, fmt.Errorf("validate files[%d] %q: mode must be %q or %q", index, entry.Source, files.ModeCopy, files.ModeSymlink)
+			}
+			configuration.Files[index] = files.Entry{Source: entry.Source, Mode: mode}
+		}
+	}
+
 	if raw.Tmux == nil {
 		return configuration, nil
 	}

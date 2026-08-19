@@ -18,7 +18,8 @@ type TmuxPane struct {
 }
 
 type rawConfig struct {
-	Tmux *rawTmuxConfig `yaml:"tmux"`
+	Tmux  *rawTmuxConfig   `yaml:"tmux"`
+	Files *[]rawFileConfig `yaml:"files"`
 }
 
 type rawTmuxConfig struct {
@@ -32,4 +33,9 @@ type rawTmuxWindow struct {
 
 type rawTmuxPane struct {
 	Command string `yaml:"command"`
+}
+
+type rawFileConfig struct {
+	Source string `yaml:"source"`
+	Mode   string `yaml:"mode"`
 }
