@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/AndyHolt/virga/internal/files"
 	"github.com/AndyHolt/virga/internal/git"
 )
 
@@ -106,6 +107,9 @@ func TestLoaderRejectsConfigurationErrors(t *testing.T) {
 		{name: "multiple documents", content: testConfigYAML("one") + "---\n" + testConfigYAML("two"), want: "more than one YAML document"},
 		{name: "missing window name", content: "tmux:\n  windows:\n    - panes:\n        - command: nvim\n", want: "name is required"},
 		{name: "window without panes", content: "tmux:\n  windows:\n    - name: editor\n", want: "at least one pane is required"},
+		{name: "missing file source", content: "files:\n  - mode: copy\n", want: "source is required"},
+		{name: "invalid file mode", content: "files:\n  - source: .env\n    mode: move\n", want: "mode must be"},
+		{name: "unknown file field", content: "files:\n  - source: .env\n    mode: copy\n    destination: .env\n", want: "field destination not found"},
 	}
 
 	for _, test := range tests {
@@ -119,6 +123,24 @@ func TestLoaderRejectsConfigurationErrors(t *testing.T) {
 				t.Fatalf("Load() error = %v, want error containing %q", err, test.want)
 			}
 		})
+	}
+}
+
+func TestLoaderLoadsFilesConfiguration(t *testing.T) {
+	root := t.TempDir()
+	writeTestConfig(t, filepath.Join(root, ".virga.yaml"), "files:\n  - source: .env\n    mode: symlink\n  - source: config/local.yaml\n    mode: copy\n")
+	loader := testLoader(root, t.TempDir(), nil, "linux")
+
+	configuration, err := loader.Load(context.Background(), root, "")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	want := []files.Entry{
+		{Source: ".env", Mode: files.ModeSymlink},
+		{Source: "config/local.yaml", Mode: files.ModeCopy},
+	}
+	if !reflect.DeepEqual(configuration.Files, want) {
+		t.Errorf("files = %#v, want %#v", configuration.Files, want)
 	}
 }
 
