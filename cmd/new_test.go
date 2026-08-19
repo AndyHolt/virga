@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/AndyHolt/virga/internal/config"
+	"github.com/AndyHolt/virga/internal/files"
 	"github.com/AndyHolt/virga/internal/git"
 	"github.com/AndyHolt/virga/internal/tmux"
 )
@@ -168,6 +169,91 @@ func TestNewWorktreeCommandCreatesTmuxSession(t *testing.T) {
 	}
 }
 
+func TestNewWorktreeCommandMaterializesFilesBeforeTmuxSession(t *testing.T) {
+	var output bytes.Buffer
+	var order []string
+	configuration := config.Config{
+		Files: []files.Entry{{Source: ".env", Mode: files.ModeSymlink}},
+		Tmux: config.TmuxConfig{Windows: []config.TmuxWindow{{
+			Name:  "editor",
+			Panes: []config.TmuxPane{{Command: "test -f .env"}},
+		}}},
+	}
+	command := newWorktreeCmd(
+		func() (string, error) { return "/repo/nested", nil },
+		func(context.Context, string, string, string) (string, error) {
+			order = append(order, "create worktree")
+			return "/worktrees/repo_feature", nil
+		},
+		newWorktreeOptions{
+			inspect: func(context.Context, string) (git.WorktreeInfo, error) {
+				return git.WorktreeInfo{Kind: git.MainWorktree, WorktreeRoot: "/repo", MainWorktreeRoot: "/repo"}, nil
+			},
+			loadConfiguration: func(context.Context, string, string) (config.Config, error) {
+				return configuration, nil
+			},
+			materializeFiles: func(_ context.Context, options files.Options) error {
+				order = append(order, "materialize files")
+				if options.RepositoryRoot != "/repo" || options.WorktreeRoot != "/worktrees/repo_feature" {
+					t.Errorf("file options = %#v, want repository and worktree roots", options)
+				}
+				if !reflect.DeepEqual(options.Entries, configuration.Files) {
+					t.Errorf("file entries = %#v, want %#v", options.Entries, configuration.Files)
+				}
+				return nil
+			},
+			createSession: func(context.Context, tmux.CreateSessionOptions) (string, error) {
+				order = append(order, "create tmux")
+				return "repo_feature", nil
+			},
+			isInteractive: func() bool { return false },
+		},
+	)
+	command.SetOut(&output)
+	command.SetArgs([]string{"feature"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	wantOrder := []string{"create worktree", "materialize files", "create tmux"}
+	if !reflect.DeepEqual(order, wantOrder) {
+		t.Errorf("operation order = %#v, want %#v", order, wantOrder)
+	}
+	if got, want := output.String(), "Branch: feature\nWorktree: /worktrees/repo_feature\nTmux session: repo_feature\n"; got != want {
+		t.Errorf("output = %q, want %q", got, want)
+	}
+}
+
+func TestNewWorktreeCommandReportsFileMaterializationFailureAfterCreation(t *testing.T) {
+	materializeErr := errors.New("copy failed")
+	command := newWorktreeCmd(
+		func() (string, error) { return "/repo", nil },
+		func(context.Context, string, string, string) (string, error) { return "/repo_feature", nil },
+		newWorktreeOptions{
+			inspect: func(context.Context, string) (git.WorktreeInfo, error) {
+				return git.WorktreeInfo{Kind: git.MainWorktree, WorktreeRoot: "/repo", MainWorktreeRoot: "/repo"}, nil
+			},
+			loadConfiguration: func(context.Context, string, string) (config.Config, error) {
+				return config.Config{Files: []files.Entry{{Source: ".env", Mode: files.ModeCopy}}}, nil
+			},
+			materializeFiles: func(context.Context, files.Options) error { return materializeErr },
+			createSession: func(context.Context, tmux.CreateSessionOptions) (string, error) {
+				t.Fatal("tmux session created after file materialization failure")
+				return "", nil
+			},
+		},
+	)
+	command.SetArgs([]string{"feature"})
+
+	err := command.Execute()
+	if !errors.Is(err, materializeErr) {
+		t.Fatalf("Execute() error = %v, want wrapped %v", err, materializeErr)
+	}
+	if !strings.Contains(err.Error(), "created branch \"feature\" and worktree \"/repo_feature\"") {
+		t.Fatalf("Execute() error = %v, want created resources", err)
+	}
+}
+
 func TestNewWorktreeCommandAttachesInteractiveTmuxSession(t *testing.T) {
 	var attached string
 	command := newWorktreeCmd(
@@ -224,6 +310,38 @@ func TestNewWorktreeCommandNoTmuxSkipsTmuxSetup(t *testing.T) {
 	}
 	if got, want := output.String(), "Branch: feature\nWorktree: /repo_feature\n"; got != want {
 		t.Errorf("output = %q, want %q", got, want)
+	}
+}
+
+func TestNewWorktreeCommandNoTmuxStillMaterializesFiles(t *testing.T) {
+	var materialized bool
+	command := newWorktreeCmd(
+		func() (string, error) { return "/repo", nil },
+		func(context.Context, string, string, string) (string, error) { return "/repo_feature", nil },
+		newWorktreeOptions{
+			inspect: func(context.Context, string) (git.WorktreeInfo, error) {
+				return git.WorktreeInfo{Kind: git.MainWorktree, WorktreeRoot: "/repo", MainWorktreeRoot: "/repo"}, nil
+			},
+			loadConfiguration: func(context.Context, string, string) (config.Config, error) {
+				return config.Config{Files: []files.Entry{{Source: ".env", Mode: files.ModeCopy}}}, nil
+			},
+			materializeFiles: func(context.Context, files.Options) error {
+				materialized = true
+				return nil
+			},
+			createSession: func(context.Context, tmux.CreateSessionOptions) (string, error) {
+				t.Fatal("tmux session created with --no-tmux")
+				return "", nil
+			},
+		},
+	)
+	command.SetArgs([]string{"feature", "--no-tmux"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !materialized {
+		t.Fatal("files were not materialized")
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/AndyHolt/virga/internal/config"
+	"github.com/AndyHolt/virga/internal/files"
 	"github.com/AndyHolt/virga/internal/git"
 	"github.com/AndyHolt/virga/internal/tmux"
 	"github.com/spf13/cobra"
@@ -15,6 +16,7 @@ type worktreeCreator func(context.Context, string, string, string) (string, erro
 type configurationLoader func(context.Context, string, string) (config.Config, error)
 type localBranchLister func(context.Context, string) ([]string, error)
 type terminalDetector func() bool
+type fileMaterializer func(context.Context, files.Options) error
 type tmuxSessionCreator func(context.Context, tmux.CreateSessionOptions) (string, error)
 type tmuxSessionAttacher func(context.Context, string) error
 
@@ -24,6 +26,7 @@ type newWorktreeOptions struct {
 	isInteractive     terminalDetector
 	selectBranch      branchSelector
 	loadConfiguration configurationLoader
+	materializeFiles  fileMaterializer
 	createSession     tmuxSessionCreator
 	attachSession     tmuxSessionAttacher
 }
@@ -63,11 +66,13 @@ func newWorktreeCmd(getwd func() (string, error), create worktreeCreator, option
 			}
 
 			setupTmux := !noTmux && options.createSession != nil
+			materializeFiles := options.materializeFiles != nil
+			needsConfiguration := setupTmux || materializeFiles
 			var configuration config.Config
 			var repositoryRoot string
-			if setupTmux {
+			if needsConfiguration {
 				if options.loadConfiguration == nil || options.inspect == nil {
-					return fmt.Errorf("tmux setup is unavailable")
+					return fmt.Errorf("configuration setup is unavailable")
 				}
 
 				configuration, err = options.loadConfiguration(cmd.Context(), directory, configPath)
@@ -112,6 +117,16 @@ func newWorktreeCmd(getwd func() (string, error), create worktreeCreator, option
 			}
 
 			output := fmt.Sprintf("Branch: %s\nWorktree: %s\n", args[0], worktree)
+			if materializeFiles && len(configuration.Files) > 0 {
+				if err := options.materializeFiles(cmd.Context(), files.Options{
+					RepositoryRoot: repositoryRoot,
+					WorktreeRoot:   worktree,
+					Entries:        configuration.Files,
+				}); err != nil {
+					return fmt.Errorf("created branch %q and worktree %q, but materialize files: %w", args[0], worktree, err)
+				}
+			}
+
 			var sessionName string
 			if setupTmux {
 				sessionName, err = options.createSession(cmd.Context(), tmux.CreateSessionOptions{

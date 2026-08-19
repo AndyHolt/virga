@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/AndyHolt/virga/internal/config"
+	"github.com/AndyHolt/virga/internal/files"
 	"github.com/AndyHolt/virga/internal/git"
 	"github.com/AndyHolt/virga/internal/tmux"
 	"github.com/spf13/cobra"
@@ -25,6 +26,7 @@ func NewRootCommand() *cobra.Command {
 			isInteractive:     isInteractiveTerminal,
 			selectBranch:      selectHuhBranch,
 			loadConfiguration: configurationLoader.Load,
+			materializeFiles:  files.Materialize,
 			createSession:     tmux.CreateSession,
 			attachSession:     tmux.AttachSession,
 		},

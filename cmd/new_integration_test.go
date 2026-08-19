@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/AndyHolt/virga/internal/config"
+	"github.com/AndyHolt/virga/internal/files"
 	"github.com/AndyHolt/virga/internal/git"
 	"github.com/AndyHolt/virga/internal/tmux"
 )
@@ -93,6 +94,53 @@ func TestNewWorktreeCommandCreatesFromSelectedBaseBranch(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewWorktreeCommandMaterializesConfiguredFiles(t *testing.T) {
+	root := newCLITestRepository(t)
+	if err := os.WriteFile(filepath.Join(root, ".env"), []byte("TOKEN=value\n"), 0o600); err != nil {
+		t.Fatalf("write source file: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "config"), 0o755); err != nil {
+		t.Fatalf("create config directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "config", "local.yaml"), []byte("debug: true\n"), 0o640); err != nil {
+		t.Fatalf("write nested source file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".virga.yaml"), []byte(`files:
+  - source: .env
+    mode: copy
+  - source: config/local.yaml
+    mode: copy
+`), 0o644); err != nil {
+		t.Fatalf("write repository config: %v", err)
+	}
+
+	configurationLoader := config.NewLoader(config.LoaderDependencies{})
+	var output bytes.Buffer
+	command := newRootCommand(
+		func() (string, error) { return root, nil },
+		git.InspectWorktree,
+		git.CreateWorktree,
+		newWorktreeOptions{
+			inspect:           git.InspectWorktree,
+			loadConfiguration: configurationLoader.Load,
+			materializeFiles:  files.Materialize,
+		},
+	)
+	command.SetOut(&output)
+	command.SetArgs([]string{"new", "configured-files"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	worktree := filepath.Join(filepath.Dir(root), "repository_configured-files")
+	if got, want := output.String(), "Branch: configured-files\nWorktree: "+worktree+"\n"; got != want {
+		t.Errorf("stdout = %q, want %q", got, want)
+	}
+	assertFileContents(t, filepath.Join(worktree, ".env"), "TOKEN=value\n")
+	assertFileContents(t, filepath.Join(worktree, "config", "local.yaml"), "debug: true\n")
 }
 
 func TestNewWorktreeCommandCreatesTmuxSessionFromRepositoryConfig(t *testing.T) {
@@ -283,6 +331,17 @@ func newCLITestRepository(t *testing.T) string {
 		t.Fatalf("resolve repository path: %v", err)
 	}
 	return canonicalRoot
+}
+
+func assertFileContents(t *testing.T, path, want string) {
+	t.Helper()
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %q: %v", path, err)
+	}
+	if got := string(contents); got != want {
+		t.Fatalf("contents of %q = %q, want %q", path, got, want)
+	}
 }
 
 func cliRunGit(t *testing.T, arguments ...string) {
