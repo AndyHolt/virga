@@ -142,6 +142,60 @@ func TestCreateSessionWrapsCommandFailure(t *testing.T) {
 	}
 }
 
+func TestAttachSessionAttachesToExistingSession(t *testing.T) {
+	runner := &recordingRunner{}
+	manager := NewManager(ManagerDependencies{
+		LookPath: func(name string) (string, error) {
+			if name != "tmux" {
+				t.Errorf("LookPath(%q), want tmux", name)
+			}
+			return "/usr/bin/tmux", nil
+		},
+		RunInteractive: runner.run,
+	})
+
+	if err := manager.AttachSession(context.Background(), "virga_feature"); err != nil {
+		t.Fatalf("AttachSession() error = %v", err)
+	}
+
+	want := []Command{{
+		Path: "/usr/bin/tmux",
+		Args: []string{"attach-session", "-t", "virga_feature"},
+	}}
+	if !reflect.DeepEqual(runner.commands, want) {
+		t.Fatalf("commands = %#v, want %#v", runner.commands, want)
+	}
+}
+
+func TestAttachSessionReportsMissingTmux(t *testing.T) {
+	runner := &recordingRunner{}
+	manager := NewManager(ManagerDependencies{
+		LookPath:       func(string) (string, error) { return "", exec.ErrNotFound },
+		RunInteractive: runner.run,
+	})
+
+	err := manager.AttachSession(context.Background(), "virga_feature")
+	if !errors.Is(err, ErrNotInstalled) {
+		t.Fatalf("AttachSession() error = %v, want %v", err, ErrNotInstalled)
+	}
+	if len(runner.commands) != 0 {
+		t.Fatalf("commands = %#v, want no commands", runner.commands)
+	}
+}
+
+func TestAttachSessionValidatesName(t *testing.T) {
+	manager := NewManager(ManagerDependencies{
+		LookPath: func(string) (string, error) {
+			t.Fatal("LookPath called after invalid session name")
+			return "", nil
+		},
+	})
+
+	if err := manager.AttachSession(context.Background(), " "); err == nil || !strings.Contains(err.Error(), "session name is required") {
+		t.Fatalf("AttachSession() error = %v, want session name validation", err)
+	}
+}
+
 func TestCreateSessionValidatesOptions(t *testing.T) {
 	valid := CreateSessionOptions{
 		RepositoryRoot: "/repositories/virga",

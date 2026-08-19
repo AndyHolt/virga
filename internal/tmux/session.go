@@ -29,17 +29,19 @@ type Command struct {
 // Runner runs a tmux subprocess.
 type Runner func(context.Context, Command) error
 
-// Dependencies contains external operations used by Manager. Nil fields use the
-// process environment and os/exec.
+// ManagerDependencies contains external operations used by Manager. Nil fields
+// use the process environment and os/exec.
 type ManagerDependencies struct {
-	LookPath func(string) (string, error)
-	Run      Runner
+	LookPath       func(string) (string, error)
+	Run            Runner
+	RunInteractive Runner
 }
 
 // Manager creates tmux sessions.
 type Manager struct {
-	lookPath func(string) (string, error)
-	run      Runner
+	lookPath       func(string) (string, error)
+	run            Runner
+	runInteractive Runner
 }
 
 // CreateSessionOptions describes the session Virga should create.
@@ -55,17 +57,27 @@ func CreateSession(ctx context.Context, options CreateSessionOptions) (string, e
 	return NewManager(ManagerDependencies{}).CreateSession(ctx, options)
 }
 
+// AttachSession attaches the current terminal to a tmux session using the
+// default process dependencies.
+func AttachSession(ctx context.Context, sessionName string) error {
+	return NewManager(ManagerDependencies{}).AttachSession(ctx, sessionName)
+}
+
 // NewManager constructs a tmux session manager.
 func NewManager(dependencies ManagerDependencies) Manager {
 	manager := Manager{
-		lookPath: dependencies.LookPath,
-		run:      dependencies.Run,
+		lookPath:       dependencies.LookPath,
+		run:            dependencies.Run,
+		runInteractive: dependencies.RunInteractive,
 	}
 	if manager.lookPath == nil {
 		manager.lookPath = exec.LookPath
 	}
 	if manager.run == nil {
 		manager.run = runCommand
+	}
+	if manager.runInteractive == nil {
+		manager.runInteractive = runInteractiveCommand
 	}
 	return manager
 }
@@ -134,6 +146,25 @@ func (m Manager) CreateSession(ctx context.Context, options CreateSessionOptions
 	return sessionName, nil
 }
 
+// AttachSession attaches the current terminal to an existing tmux session.
+func (m Manager) AttachSession(ctx context.Context, sessionName string) error {
+	if strings.TrimSpace(sessionName) == "" {
+		return fmt.Errorf("attach tmux session: session name is required")
+	}
+
+	tmuxPath, err := m.lookPath("tmux")
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrNotInstalled, err)
+	}
+	if err := m.runInteractive(ctx, Command{
+		Path: tmuxPath,
+		Args: []string{"attach-session", "-t", sessionName},
+	}); err != nil {
+		return fmt.Errorf("attach tmux session %q: %w", sessionName, err)
+	}
+	return nil
+}
+
 func (m Manager) runTmux(ctx context.Context, tmuxPath, worktreeRoot string, args ...string) error {
 	return m.run(ctx, Command{
 		Path:       tmuxPath,
@@ -176,6 +207,16 @@ func runCommand(ctx context.Context, command Command) error {
 		return err
 	}
 	return nil
+}
+
+func runInteractiveCommand(ctx context.Context, command Command) error {
+	process := exec.CommandContext(ctx, command.Path, command.Args...)
+	process.Dir = command.WorkingDir
+	process.Env = append(os.Environ(), "LC_ALL=C")
+	process.Stdin = os.Stdin
+	process.Stdout = os.Stdout
+	process.Stderr = os.Stderr
+	return process.Run()
 }
 
 // SessionName returns Virga's deterministic tmux session name for a repository

@@ -6,20 +6,27 @@ package cmd
 import (
 	"os"
 
+	"github.com/AndyHolt/virga/internal/config"
 	"github.com/AndyHolt/virga/internal/git"
+	"github.com/AndyHolt/virga/internal/tmux"
 	"github.com/spf13/cobra"
 )
 
 // NewRootCommand constructs the root Virga command.
 func NewRootCommand() *cobra.Command {
+	configurationLoader := config.NewLoader(config.LoaderDependencies{})
 	return newRootCommand(
 		os.Getwd,
 		git.InspectWorktree,
 		git.CreateWorktree,
 		newWorktreeOptions{
-			listBranches:  git.ListLocalBranches,
-			isInteractive: isInteractiveTerminal,
-			selectBranch:  selectHuhBranch,
+			inspect:           git.InspectWorktree,
+			listBranches:      git.ListLocalBranches,
+			isInteractive:     isInteractiveTerminal,
+			selectBranch:      selectHuhBranch,
+			loadConfiguration: configurationLoader.Load,
+			createSession:     tmux.CreateSession,
+			attachSession:     tmux.AttachSession,
 		},
 	)
 }

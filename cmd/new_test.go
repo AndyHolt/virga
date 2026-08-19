@@ -6,8 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/AndyHolt/virga/internal/config"
+	"github.com/AndyHolt/virga/internal/git"
+	"github.com/AndyHolt/virga/internal/tmux"
 )
 
 func TestNewWorktreeCommandSelectsBaseBranch(t *testing.T) {
@@ -106,6 +111,193 @@ func TestNewWorktreeCommandPicksBaseBranch(t *testing.T) {
 	}
 	if got, want := prompt.String(), "Select a base branch:\n"; got != want {
 		t.Errorf("prompt = %q, want %q", got, want)
+	}
+}
+
+func TestNewWorktreeCommandCreatesTmuxSession(t *testing.T) {
+	var output bytes.Buffer
+	configuration := config.Config{Tmux: config.TmuxConfig{Windows: []config.TmuxWindow{{
+		Name:  "editor",
+		Panes: []config.TmuxPane{{Command: "nvim"}},
+	}}}}
+	command := newWorktreeCmd(
+		func() (string, error) { return "/repo/nested", nil },
+		func(_ context.Context, directory, branch, base string) (string, error) {
+			if directory != "/repo/nested" || branch != "feature" || base != "release" {
+				t.Errorf("create(%q, %q, %q), want create(/repo/nested, feature, release)", directory, branch, base)
+			}
+			return "/worktrees/repo_feature", nil
+		},
+		newWorktreeOptions{
+			inspect: func(_ context.Context, directory string) (git.WorktreeInfo, error) {
+				if directory != "/repo/nested" {
+					t.Errorf("inspect directory = %q, want /repo/nested", directory)
+				}
+				return git.WorktreeInfo{Kind: git.MainWorktree, WorktreeRoot: "/repo", MainWorktreeRoot: "/repo"}, nil
+			},
+			loadConfiguration: func(_ context.Context, directory, explicitPath string) (config.Config, error) {
+				if directory != "/repo/nested" || explicitPath != "local.yaml" {
+					t.Errorf("loadConfiguration(%q, %q), want /repo/nested and local.yaml", directory, explicitPath)
+				}
+				return configuration, nil
+			},
+			createSession: func(_ context.Context, options tmux.CreateSessionOptions) (string, error) {
+				if options.RepositoryRoot != "/repo" || options.Branch != "feature" || options.WorktreeRoot != "/worktrees/repo_feature" {
+					t.Errorf("tmux options = %#v, want repository, branch, and worktree", options)
+				}
+				if !reflect.DeepEqual(options.Tmux, configuration.Tmux) {
+					t.Errorf("tmux config = %#v, want %#v", options.Tmux, configuration.Tmux)
+				}
+				return "repo_feature_12345678", nil
+			},
+			isInteractive: func() bool { return false },
+			attachSession: func(context.Context, string) error {
+				t.Fatal("attach called in non-interactive mode")
+				return nil
+			},
+		},
+	)
+	command.SetOut(&output)
+	command.SetArgs([]string{"feature", "--from", "release", "--config", "local.yaml"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if got, want := output.String(), "Branch: feature\nWorktree: /worktrees/repo_feature\nTmux session: repo_feature_12345678\n"; got != want {
+		t.Errorf("output = %q, want %q", got, want)
+	}
+}
+
+func TestNewWorktreeCommandAttachesInteractiveTmuxSession(t *testing.T) {
+	var attached string
+	command := newWorktreeCmd(
+		func() (string, error) { return "/repo", nil },
+		func(context.Context, string, string, string) (string, error) { return "/repo_feature", nil },
+		newWorktreeOptions{
+			inspect: func(context.Context, string) (git.WorktreeInfo, error) {
+				return git.WorktreeInfo{Kind: git.MainWorktree, WorktreeRoot: "/repo", MainWorktreeRoot: "/repo"}, nil
+			},
+			loadConfiguration: func(context.Context, string, string) (config.Config, error) { return config.Config{}, nil },
+			createSession:     func(context.Context, tmux.CreateSessionOptions) (string, error) { return "repo_feature", nil },
+			isInteractive:     func() bool { return true },
+			attachSession: func(_ context.Context, session string) error {
+				attached = session
+				return nil
+			},
+		},
+	)
+	command.SetArgs([]string{"feature"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if attached != "repo_feature" {
+		t.Fatalf("attached session = %q, want repo_feature", attached)
+	}
+}
+
+func TestNewWorktreeCommandNoTmuxSkipsTmuxSetup(t *testing.T) {
+	var output bytes.Buffer
+	command := newWorktreeCmd(
+		func() (string, error) { return "/repo", nil },
+		func(context.Context, string, string, string) (string, error) { return "/repo_feature", nil },
+		newWorktreeOptions{
+			inspect: func(context.Context, string) (git.WorktreeInfo, error) {
+				t.Fatal("inspect called with --no-tmux")
+				return git.WorktreeInfo{}, nil
+			},
+			loadConfiguration: func(context.Context, string, string) (config.Config, error) {
+				t.Fatal("loadConfiguration called with --no-tmux")
+				return config.Config{}, nil
+			},
+			createSession: func(context.Context, tmux.CreateSessionOptions) (string, error) {
+				t.Fatal("createSession called with --no-tmux")
+				return "", nil
+			},
+		},
+	)
+	command.SetOut(&output)
+	command.SetArgs([]string{"feature", "--no-tmux"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if got, want := output.String(), "Branch: feature\nWorktree: /repo_feature\n"; got != want {
+		t.Errorf("output = %q, want %q", got, want)
+	}
+}
+
+func TestNewWorktreeCommandNoAttachLeavesSessionRunning(t *testing.T) {
+	command := newWorktreeCmd(
+		func() (string, error) { return "/repo", nil },
+		func(context.Context, string, string, string) (string, error) { return "/repo_feature", nil },
+		newWorktreeOptions{
+			inspect: func(context.Context, string) (git.WorktreeInfo, error) {
+				return git.WorktreeInfo{Kind: git.MainWorktree, WorktreeRoot: "/repo", MainWorktreeRoot: "/repo"}, nil
+			},
+			loadConfiguration: func(context.Context, string, string) (config.Config, error) { return config.Config{}, nil },
+			createSession:     func(context.Context, tmux.CreateSessionOptions) (string, error) { return "repo_feature", nil },
+			isInteractive:     func() bool { return true },
+			attachSession: func(context.Context, string) error {
+				t.Fatal("attach called with --no-attach")
+				return nil
+			},
+		},
+	)
+	command.SetArgs([]string{"feature", "--no-attach"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+}
+
+func TestNewWorktreeCommandReportsAttachFailureAfterCreation(t *testing.T) {
+	attachErr := errors.New("attach failed")
+	command := newWorktreeCmd(
+		func() (string, error) { return "/repo", nil },
+		func(context.Context, string, string, string) (string, error) { return "/repo_feature", nil },
+		newWorktreeOptions{
+			inspect: func(context.Context, string) (git.WorktreeInfo, error) {
+				return git.WorktreeInfo{Kind: git.MainWorktree, WorktreeRoot: "/repo", MainWorktreeRoot: "/repo"}, nil
+			},
+			loadConfiguration: func(context.Context, string, string) (config.Config, error) { return config.Config{}, nil },
+			createSession:     func(context.Context, tmux.CreateSessionOptions) (string, error) { return "repo_feature", nil },
+			isInteractive:     func() bool { return true },
+			attachSession:     func(context.Context, string) error { return attachErr },
+		},
+	)
+	command.SetArgs([]string{"feature"})
+
+	err := command.Execute()
+	if !errors.Is(err, attachErr) {
+		t.Fatalf("Execute() error = %v, want wrapped %v", err, attachErr)
+	}
+	if !strings.Contains(err.Error(), "created branch \"feature\", worktree \"/repo_feature\", and tmux session \"repo_feature\"") {
+		t.Fatalf("Execute() error = %v, want created resources", err)
+	}
+}
+
+func TestNewWorktreeCommandReportsTmuxFailureAfterCreation(t *testing.T) {
+	sessionErr := errors.New("tmux failed")
+	command := newWorktreeCmd(
+		func() (string, error) { return "/repo", nil },
+		func(context.Context, string, string, string) (string, error) { return "/repo_feature", nil },
+		newWorktreeOptions{
+			inspect: func(context.Context, string) (git.WorktreeInfo, error) {
+				return git.WorktreeInfo{Kind: git.MainWorktree, WorktreeRoot: "/repo", MainWorktreeRoot: "/repo"}, nil
+			},
+			loadConfiguration: func(context.Context, string, string) (config.Config, error) { return config.Config{}, nil },
+			createSession:     func(context.Context, tmux.CreateSessionOptions) (string, error) { return "", sessionErr },
+		},
+	)
+	command.SetArgs([]string{"feature"})
+
+	err := command.Execute()
+	if !errors.Is(err, sessionErr) {
+		t.Fatalf("Execute() error = %v, want wrapped %v", err, sessionErr)
+	}
+	if !strings.Contains(err.Error(), "created branch \"feature\" and worktree \"/repo_feature\"") {
+		t.Fatalf("Execute() error = %v, want created resources", err)
 	}
 }
 

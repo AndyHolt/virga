@@ -2,14 +2,19 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/AndyHolt/virga/internal/config"
 	"github.com/AndyHolt/virga/internal/git"
+	"github.com/AndyHolt/virga/internal/tmux"
 )
 
 func TestNewWorktreeCommandCreatesFromSelectedBaseBranch(t *testing.T) {
@@ -87,6 +92,58 @@ func TestNewWorktreeCommandCreatesFromSelectedBaseBranch(t *testing.T) {
 				t.Errorf("worktree commit = %q, want %q", got, test.baseCommit)
 			}
 		})
+	}
+}
+
+func TestNewWorktreeCommandCreatesTmuxSessionFromRepositoryConfig(t *testing.T) {
+	root := newCLITestRepository(t)
+	if err := os.WriteFile(filepath.Join(root, ".virga.yaml"), []byte(`tmux:
+  windows:
+    - name: editor
+      panes:
+        - command: nvim
+`), 0o644); err != nil {
+		t.Fatalf("write repository config: %v", err)
+	}
+
+	configurationLoader := config.NewLoader(config.LoaderDependencies{})
+	var output bytes.Buffer
+	var sessionOptions tmux.CreateSessionOptions
+	command := newRootCommand(
+		func() (string, error) { return root, nil },
+		git.InspectWorktree,
+		git.CreateWorktree,
+		newWorktreeOptions{
+			inspect:           git.InspectWorktree,
+			loadConfiguration: configurationLoader.Load,
+			createSession: func(_ context.Context, options tmux.CreateSessionOptions) (string, error) {
+				sessionOptions = options
+				return "repository_configured_12345678", nil
+			},
+			isInteractive: func() bool { return true },
+			attachSession: func(context.Context, string) error {
+				t.Fatal("attach called with --no-attach")
+				return nil
+			},
+		},
+	)
+	command.SetOut(&output)
+	command.SetArgs([]string{"new", "configured", "--no-attach"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	worktree := filepath.Join(filepath.Dir(root), "repository_configured")
+	if got, want := output.String(), "Branch: configured\nWorktree: "+worktree+"\nTmux session: repository_configured_12345678\n"; got != want {
+		t.Errorf("stdout = %q, want %q", got, want)
+	}
+	if sessionOptions.RepositoryRoot != root || sessionOptions.Branch != "configured" || sessionOptions.WorktreeRoot != worktree {
+		t.Errorf("session options = %#v, want root, branch, and worktree", sessionOptions)
+	}
+	wantTmux := config.TmuxConfig{Windows: []config.TmuxWindow{{Name: "editor", Panes: []config.TmuxPane{{Command: "nvim"}}}}}
+	if !reflect.DeepEqual(sessionOptions.Tmux, wantTmux) {
+		t.Errorf("tmux config = %#v, want %#v", sessionOptions.Tmux, wantTmux)
 	}
 }
 
