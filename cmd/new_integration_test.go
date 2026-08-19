@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -96,7 +97,10 @@ func TestNewWorktreeCommandCreatesFromSelectedBaseBranch(t *testing.T) {
 	}
 }
 
-func TestNewWorktreeCommandMaterializesConfiguredFiles(t *testing.T) {
+func TestNewWorktreeCommandMaterializesConfiguredFilesBeforeTmux(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("creating symlinks on Windows requires privileges")
+	}
 	root := newCLITestRepository(t)
 	if err := os.WriteFile(filepath.Join(root, ".env"), []byte("TOKEN=value\n"), 0o600); err != nil {
 		t.Fatalf("write source file: %v", err)
@@ -109,8 +113,72 @@ func TestNewWorktreeCommandMaterializesConfiguredFiles(t *testing.T) {
 	}
 	if err := os.WriteFile(filepath.Join(root, ".virga.yaml"), []byte(`files:
   - source: .env
-    mode: copy
+    mode: symlink
   - source: config/local.yaml
+    mode: copy
+tmux:
+  windows:
+    - name: shell
+      panes:
+        - command: test -f .env
+`), 0o644); err != nil {
+		t.Fatalf("write repository config: %v", err)
+	}
+
+	configurationLoader := config.NewLoader(config.LoaderDependencies{})
+	var output bytes.Buffer
+	var sessionOptions tmux.CreateSessionOptions
+	command := newRootCommand(
+		func() (string, error) { return root, nil },
+		git.InspectWorktree,
+		git.CreateWorktree,
+		newWorktreeOptions{
+			inspect:           git.InspectWorktree,
+			loadConfiguration: configurationLoader.Load,
+			materializeFiles:  files.Materialize,
+			createSession: func(_ context.Context, options tmux.CreateSessionOptions) (string, error) {
+				sessionOptions = options
+				assertFileContents(t, filepath.Join(options.WorktreeRoot, ".env"), "TOKEN=value\n")
+				assertFileContents(t, filepath.Join(options.WorktreeRoot, "config", "local.yaml"), "debug: true\n")
+				return "repository_configured-files_12345678", nil
+			},
+			isInteractive: func() bool { return true },
+			attachSession: func(context.Context, string) error {
+				t.Fatal("attach called with --no-attach")
+				return nil
+			},
+		},
+	)
+	command.SetOut(&output)
+	command.SetArgs([]string{"new", "configured-files", "--no-attach"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	worktree := filepath.Join(filepath.Dir(root), "repository_configured-files")
+	if got, want := output.String(), "Branch: configured-files\nWorktree: "+worktree+"\nTmux session: repository_configured-files_12345678\n"; got != want {
+		t.Errorf("stdout = %q, want %q", got, want)
+	}
+	if target, err := os.Readlink(filepath.Join(worktree, ".env")); err != nil {
+		t.Fatalf("read .env symlink: %v", err)
+	} else if filepath.IsAbs(target) {
+		t.Errorf(".env symlink target = %q, want relative target", target)
+	}
+	if sessionOptions.WorktreeRoot != worktree {
+		t.Errorf("tmux worktree root = %q, want %q", sessionOptions.WorktreeRoot, worktree)
+	}
+}
+
+func TestNewWorktreeCommandReportsConfiguredFileCollision(t *testing.T) {
+	root := newCLITestRepository(t)
+	if err := os.WriteFile(filepath.Join(root, "tracked.env"), []byte("tracked\n"), 0o600); err != nil {
+		t.Fatalf("write tracked file: %v", err)
+	}
+	cliRunGit(t, "-C", root, "add", "tracked.env")
+	cliRunGit(t, "-C", root, "commit", "-m", "add tracked file")
+	if err := os.WriteFile(filepath.Join(root, ".virga.yaml"), []byte(`files:
+  - source: tracked.env
     mode: copy
 `), 0o644); err != nil {
 		t.Fatalf("write repository config: %v", err)
@@ -126,21 +194,30 @@ func TestNewWorktreeCommandMaterializesConfiguredFiles(t *testing.T) {
 			inspect:           git.InspectWorktree,
 			loadConfiguration: configurationLoader.Load,
 			materializeFiles:  files.Materialize,
+			createSession: func(context.Context, tmux.CreateSessionOptions) (string, error) {
+				t.Fatal("tmux session created after configured file collision")
+				return "", nil
+			},
 		},
 	)
 	command.SetOut(&output)
-	command.SetArgs([]string{"new", "configured-files"})
+	command.SetArgs([]string{"new", "file-collision"})
 
-	if err := command.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
+	err := command.Execute()
+	if err == nil {
+		t.Fatal("Execute() error = nil, want configured file collision")
 	}
-
-	worktree := filepath.Join(filepath.Dir(root), "repository_configured-files")
-	if got, want := output.String(), "Branch: configured-files\nWorktree: "+worktree+"\n"; got != want {
-		t.Errorf("stdout = %q, want %q", got, want)
+	worktree := filepath.Join(filepath.Dir(root), "repository_file-collision")
+	if !strings.Contains(err.Error(), "created branch \"file-collision\" and worktree \""+worktree+"\"") {
+		t.Fatalf("Execute() error = %v, want created resources", err)
 	}
-	assertFileContents(t, filepath.Join(worktree, ".env"), "TOKEN=value\n")
-	assertFileContents(t, filepath.Join(worktree, "config", "local.yaml"), "debug: true\n")
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("Execute() error = %v, want destination collision", err)
+	}
+	if got := cliGitOutput(t, "-C", root, "rev-parse", "--verify", "refs/heads/file-collision"); got == "" {
+		t.Fatal("created branch was not retained")
+	}
+	assertFileContents(t, filepath.Join(worktree, "tracked.env"), "tracked\n")
 }
 
 func TestNewWorktreeCommandCreatesTmuxSessionFromRepositoryConfig(t *testing.T) {
