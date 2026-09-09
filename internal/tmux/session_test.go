@@ -142,6 +142,103 @@ func TestCreateSessionWrapsCommandFailure(t *testing.T) {
 	}
 }
 
+func TestHasSessionReportsExistingSession(t *testing.T) {
+	runner := &recordingRunner{}
+	manager := NewManager(ManagerDependencies{
+		LookPath: func(name string) (string, error) {
+			if name != "tmux" {
+				t.Errorf("LookPath(%q), want tmux", name)
+			}
+			return "/usr/bin/tmux", nil
+		},
+		Run: runner.run,
+	})
+
+	exists, err := manager.HasSession(context.Background(), "virga_feature")
+	if err != nil {
+		t.Fatalf("HasSession() error = %v", err)
+	}
+	if !exists {
+		t.Fatal("HasSession() = false, want true")
+	}
+
+	want := []Command{{
+		Path: "/usr/bin/tmux",
+		Args: []string{"has-session", "-t", "virga_feature"},
+	}}
+	if !reflect.DeepEqual(runner.commands, want) {
+		t.Fatalf("commands = %#v, want %#v", runner.commands, want)
+	}
+}
+
+func TestHasSessionReportsMissingSession(t *testing.T) {
+	runner := &recordingRunner{failAt: 1, err: exitCodeError{code: 1}}
+	manager := NewManager(ManagerDependencies{
+		LookPath: func(string) (string, error) { return "/usr/bin/tmux", nil },
+		Run:      runner.run,
+	})
+
+	exists, err := manager.HasSession(context.Background(), "virga_feature")
+	if err != nil {
+		t.Fatalf("HasSession() error = %v", err)
+	}
+	if exists {
+		t.Fatal("HasSession() = true, want false")
+	}
+}
+
+func TestHasSessionReportsMissingTmux(t *testing.T) {
+	runner := &recordingRunner{}
+	manager := NewManager(ManagerDependencies{
+		LookPath: func(string) (string, error) { return "", exec.ErrNotFound },
+		Run:      runner.run,
+	})
+
+	exists, err := manager.HasSession(context.Background(), "virga_feature")
+	if exists {
+		t.Fatal("HasSession() = true, want false")
+	}
+	if !errors.Is(err, ErrNotInstalled) {
+		t.Fatalf("HasSession() error = %v, want %v", err, ErrNotInstalled)
+	}
+	if len(runner.commands) != 0 {
+		t.Fatalf("commands = %#v, want no commands", runner.commands)
+	}
+}
+
+func TestHasSessionWrapsCommandFailure(t *testing.T) {
+	runnerErr := errors.New("tmux failed")
+	runner := &recordingRunner{failAt: 1, err: runnerErr}
+	manager := NewManager(ManagerDependencies{
+		LookPath: func(string) (string, error) { return "/usr/bin/tmux", nil },
+		Run:      runner.run,
+	})
+
+	exists, err := manager.HasSession(context.Background(), "virga_feature")
+	if exists {
+		t.Fatal("HasSession() = true, want false")
+	}
+	if !errors.Is(err, runnerErr) {
+		t.Fatalf("HasSession() error = %v, want wrapped %v", err, runnerErr)
+	}
+	if !strings.Contains(err.Error(), "check tmux session \"virga_feature\"") {
+		t.Fatalf("HasSession() error = %v, want session context", err)
+	}
+}
+
+func TestHasSessionValidatesName(t *testing.T) {
+	manager := NewManager(ManagerDependencies{
+		LookPath: func(string) (string, error) {
+			t.Fatal("LookPath called after invalid session name")
+			return "", nil
+		},
+	})
+
+	if exists, err := manager.HasSession(context.Background(), " "); err == nil || exists || !strings.Contains(err.Error(), "session name is required") {
+		t.Fatalf("HasSession() = %v, error = %v; want validation error", exists, err)
+	}
+}
+
 func TestAttachSessionAttachesToExistingSession(t *testing.T) {
 	runner := &recordingRunner{}
 	manager := NewManager(ManagerDependencies{
@@ -288,6 +385,18 @@ func TestSessionNameFallsBackWhenWorktreeNameHasNoSafeCharacters(t *testing.T) {
 	if got, want := SessionName("/repositories/!!!"), "virga"; got != want {
 		t.Fatalf("SessionName() = %q, want %q", got, want)
 	}
+}
+
+type exitCodeError struct {
+	code int
+}
+
+func (err exitCodeError) Error() string {
+	return "exit status"
+}
+
+func (err exitCodeError) ExitCode() int {
+	return err.code
 }
 
 type recordingRunner struct {

@@ -63,6 +63,12 @@ func AttachSession(ctx context.Context, sessionName string) error {
 	return NewManager(ManagerDependencies{}).AttachSession(ctx, sessionName)
 }
 
+// HasSession reports whether a tmux session exists using the default process
+// dependencies.
+func HasSession(ctx context.Context, sessionName string) (bool, error) {
+	return NewManager(ManagerDependencies{}).HasSession(ctx, sessionName)
+}
+
 // NewManager constructs a tmux session manager.
 func NewManager(dependencies ManagerDependencies) Manager {
 	manager := Manager{
@@ -173,6 +179,28 @@ func (m Manager) AttachSession(ctx context.Context, sessionName string) error {
 	return nil
 }
 
+// HasSession reports whether an existing tmux session is available.
+func (m Manager) HasSession(ctx context.Context, sessionName string) (bool, error) {
+	if strings.TrimSpace(sessionName) == "" {
+		return false, fmt.Errorf("check tmux session: session name is required")
+	}
+
+	tmuxPath, err := m.lookPath("tmux")
+	if err != nil {
+		return false, fmt.Errorf("%w: %v", ErrNotInstalled, err)
+	}
+	if err := m.run(ctx, Command{
+		Path: tmuxPath,
+		Args: []string{"has-session", "-t", sessionName},
+	}); err != nil {
+		if hasExitCode(err, 1) {
+			return false, nil
+		}
+		return false, fmt.Errorf("check tmux session %q: %w", sessionName, err)
+	}
+	return true, nil
+}
+
 func (m Manager) runTmux(ctx context.Context, tmuxPath, worktreeRoot string, args ...string) error {
 	return m.run(ctx, Command{
 		Path:       tmuxPath,
@@ -225,6 +253,15 @@ func runInteractiveCommand(ctx context.Context, command Command) error {
 	process.Stdout = os.Stdout
 	process.Stderr = os.Stderr
 	return process.Run()
+}
+
+type exitCoder interface {
+	ExitCode() int
+}
+
+func hasExitCode(err error, code int) bool {
+	var exitErr exitCoder
+	return errors.As(err, &exitErr) && exitErr.ExitCode() == code
 }
 
 // SessionName returns Virga's deterministic tmux session name for a worktree.
