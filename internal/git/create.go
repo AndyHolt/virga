@@ -20,13 +20,18 @@ func (err *LocalBaseBranchNotFoundError) Error() string {
 	return fmt.Sprintf("local base branch %q does not exist", err.Branch)
 }
 
-// LocalBranchExistsError reports a local branch that already exists.
+// LocalBranchExistsError reports a local branch that already exists. When the
+// branch is checked out in a worktree, WorktreePath contains that path.
 type LocalBranchExistsError struct {
-	Branch string
+	Branch       string
+	WorktreePath string
 }
 
 func (err *LocalBranchExistsError) Error() string {
-	return fmt.Sprintf("local branch %q already exists", err.Branch)
+	if err.WorktreePath != "" {
+		return fmt.Sprintf("local branch %q already exists and is checked out at %q; run \"virga open %s\" to use it", err.Branch, err.WorktreePath, err.Branch)
+	}
+	return fmt.Sprintf("local branch %q already exists; run \"virga open %s\" to create or reuse its worktree", err.Branch, err.Branch)
 }
 
 // CreateWorktree creates branch from baseBranch and adds a linked worktree
@@ -71,6 +76,13 @@ func createWorktree(ctx context.Context, dir, branch, baseBranch string, run out
 
 	branchRef := "refs/heads/" + branch
 	if _, err := run(ctx, info.WorktreeRoot, "show-ref", "--verify", "--quiet", branchRef); err == nil {
+		worktrees, err := listWorktrees(ctx, run, info.WorktreeRoot)
+		if err != nil {
+			return "", fmt.Errorf("inspect worktrees for existing branch %q: %w", branch, err)
+		}
+		if worktree, found := checkedOutWorktreeForBranch(worktrees, branchRef); found {
+			return "", &LocalBranchExistsError{Branch: branch, WorktreePath: worktree.Path}
+		}
 		return "", &LocalBranchExistsError{Branch: branch}
 	} else if !hasExitCode(err, 1) {
 		return "", fmt.Errorf("check whether branch %q exists: %w", branch, err)

@@ -77,7 +77,8 @@ stdout remains suitable for scripts.
 
 The command must run from inside a non-bare Git worktree. The default base
 selection requires a checked-out branch. Existing local branches and destination
-directories are rejected.
+directories are rejected. Use `virga new` for new branches and `virga open` for
+branches that already exist.
 
 ### Configured files
 

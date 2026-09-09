@@ -3,6 +3,7 @@ package git
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -138,7 +139,10 @@ func TestCreateWorktreeRejectsConflicts(t *testing.T) {
 		if got, want := existingBranch.Branch, "existing"; got != want {
 			t.Errorf("existing branch = %q, want %q", got, want)
 		}
-		if got, want := err.Error(), `local branch "existing" already exists`; got != want {
+		if got := existingBranch.WorktreePath; got != "" {
+			t.Errorf("existing branch worktree path = %q, want empty", got)
+		}
+		if got, want := err.Error(), `local branch "existing" already exists; run "virga open existing" to create or reuse its worktree`; got != want {
 			t.Errorf("error = %q, want %q", got, want)
 		}
 	})
@@ -158,6 +162,29 @@ func TestCreateWorktreeRejectsConflicts(t *testing.T) {
 			t.Error("branch was created despite destination conflict")
 		}
 	})
+}
+
+func TestCreateWorktreeReportsExistingBranchWorktreePath(t *testing.T) {
+	mainRoot := newTestRepository(t, "repository")
+	linkedRoot := filepath.Join(t.TempDir(), "feature worktree")
+	runGit(t, "-C", mainRoot, "worktree", "add", "-b", "feature/login", linkedRoot)
+	linkedRoot = canonicalPath(t, linkedRoot)
+
+	_, err := CreateWorktree(context.Background(), mainRoot, "feature/login", "")
+	var existingBranch *LocalBranchExistsError
+	if !errors.As(err, &existingBranch) {
+		t.Fatalf("CreateWorktree() error = %v, want existing branch error", err)
+	}
+	if got, want := existingBranch.Branch, "feature/login"; got != want {
+		t.Errorf("existing branch = %q, want %q", got, want)
+	}
+	if got, want := existingBranch.WorktreePath, linkedRoot; got != want {
+		t.Errorf("existing branch worktree path = %q, want %q", got, want)
+	}
+	wantErr := fmt.Sprintf(`local branch "feature/login" already exists and is checked out at %q; run "virga open feature/login" to use it`, linkedRoot)
+	if got := err.Error(); got != wantErr {
+		t.Errorf("error = %q, want %q", got, wantErr)
+	}
 }
 
 func TestCreateWorktreeRejectsInvalidBranch(t *testing.T) {
