@@ -12,7 +12,8 @@ virga new feature/login
 
 Virga prints the new branch, absolute worktree path, and tmux session name. For
 a repository at `/projects/virga`, this command creates the worktree at
-`/projects/virga_feature-login`.
+`/projects/virga_feature-login` and names the tmux session
+`virga_feature-login`.
 
 ### Choose a base branch
 

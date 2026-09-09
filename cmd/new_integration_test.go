@@ -140,7 +140,7 @@ tmux:
 				sessionOptions = options
 				assertFileContents(t, filepath.Join(options.WorktreeRoot, ".env"), "TOKEN=value\n")
 				assertFileContents(t, filepath.Join(options.WorktreeRoot, "config", "local.yaml"), "debug: true\n")
-				return "repository_configured-files_12345678", nil
+				return "repository_configured-files", nil
 			},
 			isInteractive: func() bool { return true },
 			attachSession: func(context.Context, string) error {
@@ -157,7 +157,7 @@ tmux:
 	}
 
 	worktree := filepath.Join(filepath.Dir(root), "repository_configured-files")
-	if got, want := output.String(), "Branch: configured-files\nWorktree: "+worktree+"\nTmux session: repository_configured-files_12345678\n"; got != want {
+	if got, want := output.String(), "Branch: configured-files\nWorktree: "+worktree+"\nTmux session: repository_configured-files\n"; got != want {
 		t.Errorf("stdout = %q, want %q", got, want)
 	}
 	if target, err := os.Readlink(filepath.Join(worktree, ".env")); err != nil {
@@ -243,7 +243,7 @@ func TestNewWorktreeCommandCreatesTmuxSessionFromRepositoryConfig(t *testing.T) 
 			loadConfiguration: configurationLoader.Load,
 			createSession: func(_ context.Context, options tmux.CreateSessionOptions) (string, error) {
 				sessionOptions = options
-				return "repository_configured_12345678", nil
+				return "repository_configured", nil
 			},
 			isInteractive: func() bool { return true },
 			attachSession: func(context.Context, string) error {
@@ -260,7 +260,7 @@ func TestNewWorktreeCommandCreatesTmuxSessionFromRepositoryConfig(t *testing.T) 
 	}
 
 	worktree := filepath.Join(filepath.Dir(root), "repository_configured")
-	if got, want := output.String(), "Branch: configured\nWorktree: "+worktree+"\nTmux session: repository_configured_12345678\n"; got != want {
+	if got, want := output.String(), "Branch: configured\nWorktree: "+worktree+"\nTmux session: repository_configured\n"; got != want {
 		t.Errorf("stdout = %q, want %q", got, want)
 	}
 	if sessionOptions.RepositoryRoot != root || sessionOptions.Branch != "configured" || sessionOptions.WorktreeRoot != worktree {

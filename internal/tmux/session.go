@@ -4,8 +4,6 @@ package tmux
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -111,7 +109,7 @@ func (m Manager) CreateSession(ctx context.Context, options CreateSessionOptions
 		return "", fmt.Errorf("%w: %v", ErrNotInstalled, err)
 	}
 
-	sessionName := SessionName(options.RepositoryRoot, options.Branch)
+	sessionName := SessionName(options.WorktreeRoot)
 	firstWindow := windows[0]
 	args := []string{"new-session", "-d", "-s", sessionName, "-c", options.WorktreeRoot}
 	if firstWindow.Name != "" {
@@ -229,24 +227,20 @@ func runInteractiveCommand(ctx context.Context, command Command) error {
 	return process.Run()
 }
 
-// SessionName returns Virga's deterministic tmux session name for a repository
-// and branch.
-func SessionName(repositoryRoot, branch string) string {
-	repository := filepath.Base(filepath.Clean(repositoryRoot))
-	prefix := strings.Trim(sanitizeSessionComponent(repository)+"_"+sanitizeSessionComponent(branch), "-_")
-	if prefix == "" {
-		prefix = "virga"
+// SessionName returns Virga's deterministic tmux session name for a worktree.
+func SessionName(worktreeRoot string) string {
+	sessionName := sanitizeSessionComponent(filepath.Base(filepath.Clean(worktreeRoot)))
+	if sessionName == "" {
+		sessionName = "virga"
 	}
-	const maxPrefixLength = 80
-	if len(prefix) > maxPrefixLength {
-		prefix = strings.TrimRight(prefix[:maxPrefixLength], "-_")
-		if prefix == "" {
-			prefix = "virga"
+	const maxSessionNameLength = 80
+	if len(sessionName) > maxSessionNameLength {
+		sessionName = strings.TrimRight(sessionName[:maxSessionNameLength], "-_")
+		if sessionName == "" {
+			sessionName = "virga"
 		}
 	}
-
-	hash := sha256.Sum256([]byte(filepath.Clean(repositoryRoot) + "\x00" + branch))
-	return prefix + "_" + hex.EncodeToString(hash[:])[:8]
+	return sessionName
 }
 
 func sanitizeSessionComponent(value string) string {

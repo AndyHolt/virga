@@ -149,7 +149,7 @@ func TestNewWorktreeCommandCreatesTmuxSession(t *testing.T) {
 				if !reflect.DeepEqual(options.Tmux, configuration.Tmux) {
 					t.Errorf("tmux config = %#v, want %#v", options.Tmux, configuration.Tmux)
 				}
-				return "repo_feature_12345678", nil
+				return "repo_feature", nil
 			},
 			isInteractive: func() bool { return false },
 			attachSession: func(context.Context, string) error {
@@ -164,7 +164,7 @@ func TestNewWorktreeCommandCreatesTmuxSession(t *testing.T) {
 	if err := command.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if got, want := output.String(), "Branch: feature\nWorktree: /worktrees/repo_feature\nTmux session: repo_feature_12345678\n"; got != want {
+	if got, want := output.String(), "Branch: feature\nWorktree: /worktrees/repo_feature\nTmux session: repo_feature\n"; got != want {
 		t.Errorf("output = %q, want %q", got, want)
 	}
 }

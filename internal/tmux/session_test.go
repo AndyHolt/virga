@@ -33,7 +33,7 @@ func TestCreateSessionCreatesDefaultSession(t *testing.T) {
 		t.Fatalf("CreateSession() error = %v", err)
 	}
 
-	wantSession := SessionName(options.RepositoryRoot, options.Branch)
+	wantSession := SessionName(options.WorktreeRoot)
 	if session != wantSession {
 		t.Fatalf("session = %q, want %q", session, wantSession)
 	}
@@ -77,7 +77,7 @@ func TestCreateSessionCreatesConfiguredWindowsAndPanes(t *testing.T) {
 		t.Fatalf("CreateSession() error = %v", err)
 	}
 
-	wantSession := SessionName(options.RepositoryRoot, options.Branch)
+	wantSession := SessionName(options.WorktreeRoot)
 	if session != wantSession {
 		t.Fatalf("session = %q, want %q", session, wantSession)
 	}
@@ -263,20 +263,30 @@ func TestCreateSessionValidatesOptions(t *testing.T) {
 	}
 }
 
-func TestSessionNameIsDeterministicAndTmuxSafe(t *testing.T) {
-	first := SessionName("/repositories/main repository", "feature/login:api")
-	second := SessionName("/repositories/main repository", "feature/login:api")
+func TestSessionNameUsesWorktreeDirectoryName(t *testing.T) {
+	first := SessionName("/repositories/virga_fix-tmux-attach")
+	second := SessionName("/repositories/virga_fix-tmux-attach")
 	if first != second {
 		t.Fatalf("SessionName() = %q then %q, want deterministic", first, second)
 	}
-	if !strings.HasPrefix(first, "main-repository_feature-login-api_") {
-		t.Fatalf("SessionName() = %q, want sanitized repository and branch prefix", first)
+	if first != "virga_fix-tmux-attach" {
+		t.Fatalf("SessionName() = %q, want worktree directory name", first)
 	}
-	if strings.ContainsAny(first, ":/ ") {
-		t.Fatalf("SessionName() = %q, want no tmux target separators or whitespace", first)
+}
+
+func TestSessionNameSanitizesTmuxTargetUnsafeCharacters(t *testing.T) {
+	name := SessionName("/repositories/main repository:feature api")
+	if name != "main-repository-feature-api" {
+		t.Fatalf("SessionName() = %q, want sanitized worktree directory name", name)
 	}
-	if other := SessionName("/repositories/main repository", "feature/login-api"); other == first {
-		t.Fatalf("SessionName() collision for distinct branches: %q", first)
+	if strings.ContainsAny(name, ":/ ") {
+		t.Fatalf("SessionName() = %q, want no tmux target separators or whitespace", name)
+	}
+}
+
+func TestSessionNameFallsBackWhenWorktreeNameHasNoSafeCharacters(t *testing.T) {
+	if got, want := SessionName("/repositories/!!!"), "virga"; got != want {
+		t.Fatalf("SessionName() = %q, want %q", got, want)
 	}
 }
 
