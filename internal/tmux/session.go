@@ -1,4 +1,4 @@
-// Package tmux creates tmux sessions for Virga worktrees.
+// Package tmux creates, discovers, and activates sessions for Virga worktrees.
 package tmux
 
 import (
@@ -52,9 +52,32 @@ type CreateSessionOptions struct {
 	Tmux           config.TmuxConfig
 }
 
+// EnsureSessionAction describes whether EnsureSession created or reused a
+// tmux session.
+type EnsureSessionAction string
+
+const (
+	// SessionCreated indicates that Virga created the tmux session.
+	SessionCreated EnsureSessionAction = "created"
+	// SessionReused indicates that Virga reused an existing tmux session.
+	SessionReused EnsureSessionAction = "reused"
+)
+
+// EnsureSessionResult describes the tmux session available for a worktree.
+type EnsureSessionResult struct {
+	Name   string
+	Action EnsureSessionAction
+}
+
 // CreateSession creates a tmux session using the default process dependencies.
 func CreateSession(ctx context.Context, options CreateSessionOptions) (string, error) {
 	return NewManager(ManagerDependencies{}).CreateSession(ctx, options)
+}
+
+// EnsureSession creates or reuses a tmux session using the default process
+// dependencies.
+func EnsureSession(ctx context.Context, options CreateSessionOptions) (EnsureSessionResult, error) {
+	return NewManager(ManagerDependencies{}).EnsureSession(ctx, options)
 }
 
 // AttachSession attaches the current terminal to a tmux session using the
@@ -90,6 +113,29 @@ func NewManager(dependencies ManagerDependencies) Manager {
 		manager.runInteractive = runInteractiveCommand
 	}
 	return manager
+}
+
+// EnsureSession returns an existing deterministic tmux session for a worktree,
+// or creates it when it does not already exist.
+func (m Manager) EnsureSession(ctx context.Context, options CreateSessionOptions) (EnsureSessionResult, error) {
+	if strings.TrimSpace(options.WorktreeRoot) == "" {
+		return EnsureSessionResult{}, fmt.Errorf("ensure tmux session: worktree root is required")
+	}
+
+	sessionName := SessionName(options.WorktreeRoot)
+	exists, err := m.HasSession(ctx, sessionName)
+	if err != nil {
+		return EnsureSessionResult{}, fmt.Errorf("ensure tmux session %q: %w", sessionName, err)
+	}
+	if exists {
+		return EnsureSessionResult{Name: sessionName, Action: SessionReused}, nil
+	}
+
+	createdName, err := m.CreateSession(ctx, options)
+	if err != nil {
+		return EnsureSessionResult{}, fmt.Errorf("ensure tmux session %q: %w", sessionName, err)
+	}
+	return EnsureSessionResult{Name: createdName, Action: SessionCreated}, nil
 }
 
 // CreateSession creates a detached tmux session for a worktree and returns its
