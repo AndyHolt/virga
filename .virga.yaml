@@ -1,0 +1,6 @@
+tmux:
+  windows:
+    - name: shell
+      panes:
+        - command:
+        - command: pi
