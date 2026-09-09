@@ -2,6 +2,25 @@
 
 Virga manages Git worktrees for parallel development.
 
+## List worktrees
+
+List the current repository's Git worktrees and the expected Virga tmux session
+for each branch worktree:
+
+```sh
+virga list
+virga list --json
+```
+
+Tmux status is reported as `running`, `missing`, `unavailable` when tmux is not
+installed, or `unknown` when tmux cannot be queried. Detached worktrees do not
+have an expected Virga tmux session.
+
+JSON output is an object with a `worktrees` array. Each worktree contains
+`path`, `type`, `head`, `branch`, `branch_ref`, `state`, `detached`, `bare`,
+`locked`, `lock_reason`, `prunable`, `prune_reason`, and `tmux` fields. The
+`tmux` object contains `session` and `status`.
+
 ## Create a worktree
 
 Create a new branch and a sibling worktree from the branch currently checked out:
