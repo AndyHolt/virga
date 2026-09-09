@@ -33,6 +33,7 @@ type Runner func(context.Context, Command) error
 // use the process environment and os/exec.
 type ManagerDependencies struct {
 	LookPath       func(string) (string, error)
+	LookupEnv      func(string) (string, bool)
 	Run            Runner
 	RunInteractive Runner
 }
@@ -40,6 +41,7 @@ type ManagerDependencies struct {
 // Manager creates tmux sessions.
 type Manager struct {
 	lookPath       func(string) (string, error)
+	lookupEnv      func(string) (string, bool)
 	run            Runner
 	runInteractive Runner
 }
@@ -67,11 +69,15 @@ func AttachSession(ctx context.Context, sessionName string) error {
 func NewManager(dependencies ManagerDependencies) Manager {
 	manager := Manager{
 		lookPath:       dependencies.LookPath,
+		lookupEnv:      dependencies.LookupEnv,
 		run:            dependencies.Run,
 		runInteractive: dependencies.RunInteractive,
 	}
 	if manager.lookPath == nil {
 		manager.lookPath = exec.LookPath
+	}
+	if manager.lookupEnv == nil {
+		manager.lookupEnv = os.LookupEnv
 	}
 	if manager.run == nil {
 		manager.run = runCommand
@@ -156,9 +162,13 @@ func (m Manager) AttachSession(ctx context.Context, sessionName string) error {
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrNotInstalled, err)
 	}
+	args := []string{"attach-session", "-t", sessionName}
+	if _, insideTmux := m.lookupEnv("TMUX"); insideTmux {
+		args = []string{"switch-client", "-t", sessionName}
+	}
 	if err := m.runInteractive(ctx, Command{
 		Path: tmuxPath,
-		Args: []string{"attach-session", "-t", sessionName},
+		Args: args,
 	}); err != nil {
 		return fmt.Errorf("attach tmux session %q: %w", sessionName, err)
 	}

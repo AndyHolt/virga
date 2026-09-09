@@ -66,7 +66,8 @@ The `virga new` lifecycle is:
 ### tmux sessions
 
 By default, `virga new` creates a detached tmux session in the new worktree. If
-Virga is running interactively, it attaches to that session after creation.
+Virga is running interactively, it attaches or switches to that session after
+creation.
 
 Skip tmux setup or leave the created session detached with:
 
