@@ -24,6 +24,15 @@ func NewRootCommand() *cobra.Command {
 			listWorktrees: git.ListWorktrees,
 			hasSession:    tmux.HasSession,
 		},
+		openWorktreeOptions{
+			inspect:           git.InspectWorktree,
+			listBranches:      git.ListLocalBranches,
+			listWorktrees:     git.ListWorktrees,
+			isInteractive:     isInteractiveTerminal,
+			loadConfiguration: configurationLoader.Load,
+			ensureSession:     tmux.EnsureSession,
+			attachSession:     tmux.AttachSession,
+		},
 		newWorktreeOptions{
 			inspect:           git.InspectWorktree,
 			listBranches:      git.ListLocalBranches,
@@ -42,6 +51,7 @@ func newRootCommand(
 	inspect directoryInspector,
 	create worktreeCreator,
 	listOptions listWorktreeOptions,
+	openOptions openWorktreeOptions,
 	worktreeOptions newWorktreeOptions,
 ) *cobra.Command {
 	command := &cobra.Command{
@@ -52,7 +62,7 @@ func newRootCommand(
 			return command.Help()
 		},
 	}
-	command.AddCommand(newInfoCmd(getwd, inspect), newListCmd(getwd, listOptions), newWorktreeCmd(getwd, create, worktreeOptions))
+	command.AddCommand(newInfoCmd(getwd, inspect), newListCmd(getwd, listOptions), newWorktreeCmd(getwd, create, worktreeOptions), newOpenCmd(getwd, openOptions))
 
 	return command
 }

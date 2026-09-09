@@ -19,8 +19,8 @@ func TestNewRootCommand(t *testing.T) {
 	}
 
 	commands := command.Commands()
-	if len(commands) != 3 || commands[0].Name() != "info" || commands[1].Name() != "list" || commands[2].Name() != "new" {
-		t.Errorf("subcommands = %v, want info, list, and new", commands)
+	if len(commands) != 4 || commands[0].Name() != "info" || commands[1].Name() != "list" || commands[2].Name() != "new" || commands[3].Name() != "open" {
+		t.Errorf("subcommands = %v, want info, list, new, and open", commands)
 	}
 	for _, flag := range []string{"config", "toggle"} {
 		if command.Flag(flag) != nil {
@@ -53,6 +53,8 @@ func TestRootCommandHelp(t *testing.T) {
 		"List Git worktrees and Virga tmux sessions",
 		"new",
 		"Create a branch in a new Git worktree",
+		"open",
+		"Open an existing branch worktree",
 		"-h, --help",
 	} {
 		if !strings.Contains(help, want) {
@@ -69,6 +71,7 @@ func TestNewRootCommandReturnsIndependentCommands(t *testing.T) {
 	first.Commands()[0].Short = "changed"
 	first.Commands()[1].Short = "changed"
 	first.Commands()[2].Short = "changed"
+	first.Commands()[3].Short = "changed"
 
 	second := NewRootCommand()
 	if second.Flag("test-only") != nil {
@@ -82,5 +85,8 @@ func TestNewRootCommandReturnsIndependentCommands(t *testing.T) {
 	}
 	if got := second.Commands()[2].Short; got != "Create a branch in a new Git worktree" {
 		t.Errorf("new Short = %q after changing another command", got)
+	}
+	if got := second.Commands()[3].Short; got != "Open an existing branch worktree" {
+		t.Errorf("open Short = %q after changing another command", got)
 	}
 }

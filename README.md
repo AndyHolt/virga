@@ -21,6 +21,30 @@ JSON output is an object with a `worktrees` array. Each worktree contains
 `locked`, `lock_reason`, `prunable`, `prune_reason`, and `tmux` fields. The
 `tmux` object contains `session` and `status`.
 
+## Open an existing worktree
+
+Open a local branch that is already checked out in a Git worktree:
+
+```sh
+virga open feature/login
+```
+
+Virga reuses the existing worktree, ensures the deterministic tmux session for
+that worktree exists, and attaches or switches to that session when running
+interactively. It prints the branch, worktree path, `Worktree action: reused`,
+and `Tmux action: created` or `reused`.
+
+Skip tmux setup or leave the session detached with:
+
+```sh
+virga open feature/login --no-tmux
+virga open feature/login --no-attach
+```
+
+This first `open` implementation does not create missing worktrees. If the local
+branch exists but is not checked out in a worktree, Virga reports that creating a
+worktree for an existing branch is not implemented yet.
+
 ## Create a worktree
 
 Create a new branch and a sibling worktree from the branch currently checked out:

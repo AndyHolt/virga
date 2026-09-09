@@ -239,6 +239,169 @@ func TestHasSessionValidatesName(t *testing.T) {
 	}
 }
 
+func TestEnsureSessionReusesExistingSession(t *testing.T) {
+	runner := &recordingRunner{}
+	manager := NewManager(ManagerDependencies{
+		LookPath: func(name string) (string, error) {
+			if name != "tmux" {
+				t.Errorf("LookPath(%q), want tmux", name)
+			}
+			return "/usr/bin/tmux", nil
+		},
+		Run: runner.run,
+	})
+	options := CreateSessionOptions{
+		RepositoryRoot: "/repositories/virga",
+		Branch:         "feature",
+		WorktreeRoot:   "/repositories/virga_feature",
+	}
+
+	result, err := manager.EnsureSession(context.Background(), options)
+	if err != nil {
+		t.Fatalf("EnsureSession() error = %v", err)
+	}
+
+	wantResult := EnsureSessionResult{Name: SessionName(options.WorktreeRoot), Action: SessionReused}
+	if result != wantResult {
+		t.Fatalf("EnsureSession() = %#v, want %#v", result, wantResult)
+	}
+	wantCommands := []Command{{
+		Path: "/usr/bin/tmux",
+		Args: []string{"has-session", "-t", wantResult.Name},
+	}}
+	if !reflect.DeepEqual(runner.commands, wantCommands) {
+		t.Fatalf("commands = %#v, want %#v", runner.commands, wantCommands)
+	}
+}
+
+func TestEnsureSessionCreatesMissingSession(t *testing.T) {
+	runner := &recordingRunner{failAt: 1, err: exitCodeError{code: 1}}
+	manager := NewManager(ManagerDependencies{
+		LookPath: func(string) (string, error) { return "/usr/bin/tmux", nil },
+		Run:      runner.run,
+	})
+	options := CreateSessionOptions{
+		RepositoryRoot: "/repositories/virga",
+		Branch:         "feature",
+		WorktreeRoot:   "/repositories/virga_feature",
+	}
+
+	result, err := manager.EnsureSession(context.Background(), options)
+	if err != nil {
+		t.Fatalf("EnsureSession() error = %v", err)
+	}
+
+	sessionName := SessionName(options.WorktreeRoot)
+	wantResult := EnsureSessionResult{Name: sessionName, Action: SessionCreated}
+	if result != wantResult {
+		t.Fatalf("EnsureSession() = %#v, want %#v", result, wantResult)
+	}
+	wantCommands := []Command{
+		{Path: "/usr/bin/tmux", Args: []string{"has-session", "-t", sessionName}},
+		{Path: "/usr/bin/tmux", Args: []string{"new-session", "-d", "-s", sessionName, "-c", options.WorktreeRoot}, WorkingDir: options.WorktreeRoot},
+	}
+	if !reflect.DeepEqual(runner.commands, wantCommands) {
+		t.Fatalf("commands = %#v, want %#v", runner.commands, wantCommands)
+	}
+}
+
+func TestEnsureSessionReportsMissingTmux(t *testing.T) {
+	runner := &recordingRunner{}
+	manager := NewManager(ManagerDependencies{
+		LookPath: func(string) (string, error) { return "", exec.ErrNotFound },
+		Run:      runner.run,
+	})
+
+	_, err := manager.EnsureSession(context.Background(), CreateSessionOptions{
+		RepositoryRoot: "/repositories/virga",
+		Branch:         "feature",
+		WorktreeRoot:   "/repositories/virga_feature",
+	})
+	if !errors.Is(err, ErrNotInstalled) {
+		t.Fatalf("EnsureSession() error = %v, want %v", err, ErrNotInstalled)
+	}
+	if !strings.Contains(err.Error(), "ensure tmux session") {
+		t.Fatalf("EnsureSession() error = %v, want ensure context", err)
+	}
+	if len(runner.commands) != 0 {
+		t.Fatalf("commands = %#v, want no commands", runner.commands)
+	}
+}
+
+func TestEnsureSessionWrapsCheckFailure(t *testing.T) {
+	runnerErr := errors.New("tmux failed")
+	runner := &recordingRunner{failAt: 1, err: runnerErr}
+	manager := NewManager(ManagerDependencies{
+		LookPath: func(string) (string, error) { return "/usr/bin/tmux", nil },
+		Run:      runner.run,
+	})
+
+	_, err := manager.EnsureSession(context.Background(), CreateSessionOptions{
+		RepositoryRoot: "/repositories/virga",
+		Branch:         "feature",
+		WorktreeRoot:   "/repositories/virga_feature",
+	})
+	if !errors.Is(err, runnerErr) {
+		t.Fatalf("EnsureSession() error = %v, want wrapped %v", err, runnerErr)
+	}
+	if !strings.Contains(err.Error(), "ensure tmux session") || !strings.Contains(err.Error(), "check tmux session") {
+		t.Fatalf("EnsureSession() error = %v, want ensure and check context", err)
+	}
+}
+
+func TestEnsureSessionWrapsCreateFailure(t *testing.T) {
+	createErr := errors.New("create failed")
+	var commands []Command
+	calls := 0
+	manager := NewManager(ManagerDependencies{
+		LookPath: func(string) (string, error) { return "/usr/bin/tmux", nil },
+		Run: func(_ context.Context, command Command) error {
+			commands = append(commands, Command{
+				Path:       command.Path,
+				Args:       append([]string(nil), command.Args...),
+				WorkingDir: command.WorkingDir,
+			})
+			calls++
+			if calls == 1 {
+				return exitCodeError{code: 1}
+			}
+			if calls == 2 {
+				return createErr
+			}
+			return nil
+		},
+	})
+	options := CreateSessionOptions{
+		RepositoryRoot: "/repositories/virga",
+		Branch:         "feature",
+		WorktreeRoot:   "/repositories/virga_feature",
+	}
+
+	_, err := manager.EnsureSession(context.Background(), options)
+	if !errors.Is(err, createErr) {
+		t.Fatalf("EnsureSession() error = %v, want wrapped %v", err, createErr)
+	}
+	if !strings.Contains(err.Error(), "ensure tmux session") || !strings.Contains(err.Error(), "create tmux session") {
+		t.Fatalf("EnsureSession() error = %v, want ensure and create context", err)
+	}
+	if len(commands) != 2 {
+		t.Fatalf("commands = %#v, want check and create commands", commands)
+	}
+}
+
+func TestEnsureSessionValidatesOptions(t *testing.T) {
+	manager := NewManager(ManagerDependencies{
+		LookPath: func(string) (string, error) {
+			t.Fatal("LookPath called after invalid options")
+			return "", nil
+		},
+	})
+
+	if result, err := manager.EnsureSession(context.Background(), CreateSessionOptions{WorktreeRoot: " "}); err == nil || result != (EnsureSessionResult{}) || !strings.Contains(err.Error(), "worktree root is required") {
+		t.Fatalf("EnsureSession() = %#v, error = %v; want validation error", result, err)
+	}
+}
+
 func TestAttachSessionAttachesToExistingSession(t *testing.T) {
 	runner := &recordingRunner{}
 	manager := NewManager(ManagerDependencies{
