@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -386,10 +387,57 @@ func TestNewWorktreeCommandReportsExistingBranch(t *testing.T) {
 	if got, want := existingBranch.Branch, "existing"; got != want {
 		t.Errorf("existing branch = %q, want %q", got, want)
 	}
+	if got := existingBranch.WorktreePath; got != "" {
+		t.Errorf("existing branch worktree path = %q, want empty", got)
+	}
 
 	got := output.String()
-	if want := "Error: local branch \"existing\" already exists\n"; !strings.HasPrefix(got, want) {
+	if want := "Error: local branch \"existing\" already exists; run \"virga open existing\" to create or reuse its worktree\n"; !strings.HasPrefix(got, want) {
 		t.Errorf("output = %q, want prefix %q", got, want)
+	}
+	if !strings.Contains(got, "Usage:") {
+		t.Errorf("output = %q, want command usage", got)
+	}
+	if strings.Contains(got, "create worktree") {
+		t.Errorf("output = %q, contains implementation detail", got)
+	}
+}
+
+func TestNewWorktreeCommandReportsExistingCheckedOutBranch(t *testing.T) {
+	root := newCLITestRepository(t)
+	linkedRoot := filepath.Join(t.TempDir(), "feature worktree")
+	cliRunGit(t, "-C", root, "worktree", "add", "-b", "feature/login", linkedRoot)
+	linkedRoot = cliCanonicalPath(t, linkedRoot)
+
+	var output bytes.Buffer
+	command := newRootCommand(
+		func() (string, error) { return root, nil },
+		git.InspectWorktree,
+		git.CreateWorktree,
+		listWorktreeOptions{},
+		openWorktreeOptions{},
+		newWorktreeOptions{},
+	)
+	command.SetOut(&output)
+	command.SetErr(&output)
+	command.SetArgs([]string{"new", "feature/login"})
+
+	err := command.Execute()
+	var existingBranch *git.LocalBranchExistsError
+	if !errors.As(err, &existingBranch) {
+		t.Fatalf("Execute() error = %v, want existing branch error", err)
+	}
+	if got, want := existingBranch.Branch, "feature/login"; got != want {
+		t.Errorf("existing branch = %q, want %q", got, want)
+	}
+	if got, want := existingBranch.WorktreePath, linkedRoot; got != want {
+		t.Errorf("existing branch worktree path = %q, want %q", got, want)
+	}
+
+	got := output.String()
+	wantPrefix := "Error: " + fmt.Sprintf(`local branch "feature/login" already exists and is checked out at %q; run "virga open feature/login" to use it`, linkedRoot) + "\n"
+	if !strings.HasPrefix(got, wantPrefix) {
+		t.Errorf("output = %q, want prefix %q", got, wantPrefix)
 	}
 	if !strings.Contains(got, "Usage:") {
 		t.Errorf("output = %q, want command usage", got)
@@ -449,6 +497,15 @@ func cliGitOutput(t *testing.T, arguments ...string) string {
 		t.Fatalf("git %v: %v\n%s", arguments, err, output)
 	}
 	return strings.TrimSpace(string(output))
+}
+
+func cliCanonicalPath(t *testing.T, path string) string {
+	t.Helper()
+	canonical, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		t.Fatalf("resolve path %q: %v", path, err)
+	}
+	return canonical
 }
 
 func containsBranch(branches []string, want string) bool {
