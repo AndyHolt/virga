@@ -65,6 +65,7 @@ func TestNewWorktreeCommandCreatesFromSelectedBaseBranch(t *testing.T) {
 				func() (string, error) { return root, nil },
 				git.InspectWorktree,
 				git.CreateWorktree,
+				listWorktreeOptions{},
 				newWorktreeOptions{
 					listBranches:  git.ListLocalBranches,
 					isInteractive: func() bool { return true },
@@ -132,6 +133,7 @@ tmux:
 		func() (string, error) { return root, nil },
 		git.InspectWorktree,
 		git.CreateWorktree,
+		listWorktreeOptions{},
 		newWorktreeOptions{
 			inspect:           git.InspectWorktree,
 			loadConfiguration: configurationLoader.Load,
@@ -190,6 +192,7 @@ func TestNewWorktreeCommandReportsConfiguredFileCollision(t *testing.T) {
 		func() (string, error) { return root, nil },
 		git.InspectWorktree,
 		git.CreateWorktree,
+		listWorktreeOptions{},
 		newWorktreeOptions{
 			inspect:           git.InspectWorktree,
 			loadConfiguration: configurationLoader.Load,
@@ -238,6 +241,7 @@ func TestNewWorktreeCommandCreatesTmuxSessionFromRepositoryConfig(t *testing.T) 
 		func() (string, error) { return root, nil },
 		git.InspectWorktree,
 		git.CreateWorktree,
+		listWorktreeOptions{},
 		newWorktreeOptions{
 			inspect:           git.InspectWorktree,
 			loadConfiguration: configurationLoader.Load,
@@ -292,6 +296,7 @@ func TestNewWorktreeCommandReportsNonGitRepository(t *testing.T) {
 				func() (string, error) { return t.TempDir(), nil },
 				git.InspectWorktree,
 				git.CreateWorktree,
+				listWorktreeOptions{},
 				newWorktreeOptions{
 					listBranches:  git.ListLocalBranches,
 					isInteractive: func() bool { return test.isInteractive },
@@ -322,6 +327,7 @@ func TestNewWorktreeCommandReportsMissingBaseBranch(t *testing.T) {
 		func() (string, error) { return root, nil },
 		git.InspectWorktree,
 		git.CreateWorktree,
+		listWorktreeOptions{},
 		newWorktreeOptions{},
 	)
 	command.SetOut(&stderr)
@@ -358,6 +364,7 @@ func TestNewWorktreeCommandReportsExistingBranch(t *testing.T) {
 		func() (string, error) { return root, nil },
 		git.InspectWorktree,
 		git.CreateWorktree,
+		listWorktreeOptions{},
 		newWorktreeOptions{},
 	)
 	command.SetOut(&output)
