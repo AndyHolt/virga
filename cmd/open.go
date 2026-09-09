@@ -5,19 +5,24 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/AndyHolt/virga/internal/config"
+	"github.com/AndyHolt/virga/internal/files"
 	"github.com/AndyHolt/virga/internal/git"
 	"github.com/AndyHolt/virga/internal/tmux"
 	"github.com/spf13/cobra"
 )
 
 type tmuxSessionEnsurer func(context.Context, tmux.CreateSessionOptions) (tmux.EnsureSessionResult, error)
+type existingBranchWorktreeAdder func(context.Context, string, string) (string, error)
 
 type openWorktreeOptions struct {
 	inspect           directoryInspector
 	listBranches      localBranchLister
 	listWorktrees     worktreeLister
+	addWorktree       existingBranchWorktreeAdder
 	isInteractive     terminalDetector
 	loadConfiguration configurationLoader
+	materializeFiles  fileMaterializer
 	ensureSession     tmuxSessionEnsurer
 	attachSession     tmuxSessionAttacher
 }
@@ -61,22 +66,29 @@ func newOpenCmd(getwd func() (string, error), options openWorktreeOptions) *cobr
 				return openWorktreeCommandError(cmd, "list worktrees", err)
 			}
 			worktree, found := reusableWorktreeForBranch(worktrees, branch)
-			if !found {
-				return fmt.Errorf("local branch %q exists but has no usable worktree; creating a worktree for an existing branch is not implemented yet", branch)
+			worktreeAction := "reused"
+			setupTmux := !noTmux
+			createdWorktree := !found
+			materializeFiles := createdWorktree && options.materializeFiles != nil
+			needsConfiguration := setupTmux || materializeFiles
+
+			if createdWorktree {
+				if options.addWorktree == nil {
+					return fmt.Errorf("local branch %q exists but has no usable worktree and worktree creation is unavailable", branch)
+				}
+			}
+			if setupTmux && options.ensureSession == nil {
+				return fmt.Errorf("open worktree: tmux setup is unavailable")
 			}
 
-			output := fmt.Sprintf("Branch: %s\nWorktree: %s\nWorktree action: reused\n", branch, worktree.Path)
-			setupTmux := !noTmux
-			var session tmux.EnsureSessionResult
-			if setupTmux {
-				if options.ensureSession == nil {
-					return fmt.Errorf("open worktree: tmux setup is unavailable")
-				}
+			var configuration config.Config
+			var repositoryRoot string
+			if needsConfiguration {
 				if options.loadConfiguration == nil || options.inspect == nil {
 					return fmt.Errorf("configuration setup is unavailable")
 				}
 
-				configuration, err := options.loadConfiguration(cmd.Context(), directory, configPath)
+				configuration, err = options.loadConfiguration(cmd.Context(), directory, configPath)
 				if err != nil {
 					return openWorktreeCommandError(cmd, "load configuration", err)
 				}
@@ -87,17 +99,44 @@ func newOpenCmd(getwd func() (string, error), options openWorktreeOptions) *cobr
 				if info.Kind == git.NotWorktree {
 					return openWorktreeCommandError(cmd, "inspect current worktree", git.ErrNotGitRepository)
 				}
-				if info.MainWorktreeRoot == "" {
+				repositoryRoot = info.MainWorktreeRoot
+				if repositoryRoot == "" {
 					return fmt.Errorf("inspect current worktree: Git returned an empty primary worktree root")
 				}
+			}
 
+			if createdWorktree {
+				path, err := options.addWorktree(cmd.Context(), directory, branch)
+				if err != nil {
+					return openWorktreeCommandError(cmd, "create worktree", err)
+				}
+				worktree = git.ListedWorktree{Path: path, Kind: git.LinkedWorktree, Branch: branch, BranchRef: "refs/heads/" + branch}
+				worktreeAction = "created"
+			}
+
+			output := fmt.Sprintf("Branch: %s\nWorktree: %s\nWorktree action: %s\n", branch, worktree.Path, worktreeAction)
+			if materializeFiles && len(configuration.Files) > 0 {
+				if err := options.materializeFiles(cmd.Context(), files.Options{
+					RepositoryRoot: repositoryRoot,
+					WorktreeRoot:   worktree.Path,
+					Entries:        configuration.Files,
+				}); err != nil {
+					return fmt.Errorf("created worktree for branch %q at %q, but materialize files: %w", branch, worktree.Path, err)
+				}
+			}
+
+			var session tmux.EnsureSessionResult
+			if setupTmux {
 				session, err = options.ensureSession(cmd.Context(), tmux.CreateSessionOptions{
-					RepositoryRoot: info.MainWorktreeRoot,
+					RepositoryRoot: repositoryRoot,
 					Branch:         branch,
 					WorktreeRoot:   worktree.Path,
 					Tmux:           configuration.Tmux,
 				})
 				if err != nil {
+					if createdWorktree {
+						return fmt.Errorf("created worktree for branch %q at %q, but ensure tmux session: %w", branch, worktree.Path, err)
+					}
 					return fmt.Errorf("open branch %q in worktree %q, but ensure tmux session: %w", branch, worktree.Path, err)
 				}
 				output += fmt.Sprintf("Tmux session: %s\nTmux action: %s\n", session.Name, session.Action)
