@@ -66,6 +66,7 @@ func TestNewWorktreeCommandCreatesFromSelectedBaseBranch(t *testing.T) {
 				git.InspectWorktree,
 				git.CreateWorktree,
 				listWorktreeOptions{},
+				openWorktreeOptions{},
 				newWorktreeOptions{
 					listBranches:  git.ListLocalBranches,
 					isInteractive: func() bool { return true },
@@ -134,6 +135,7 @@ tmux:
 		git.InspectWorktree,
 		git.CreateWorktree,
 		listWorktreeOptions{},
+		openWorktreeOptions{},
 		newWorktreeOptions{
 			inspect:           git.InspectWorktree,
 			loadConfiguration: configurationLoader.Load,
@@ -193,6 +195,7 @@ func TestNewWorktreeCommandReportsConfiguredFileCollision(t *testing.T) {
 		git.InspectWorktree,
 		git.CreateWorktree,
 		listWorktreeOptions{},
+		openWorktreeOptions{},
 		newWorktreeOptions{
 			inspect:           git.InspectWorktree,
 			loadConfiguration: configurationLoader.Load,
@@ -242,6 +245,7 @@ func TestNewWorktreeCommandCreatesTmuxSessionFromRepositoryConfig(t *testing.T) 
 		git.InspectWorktree,
 		git.CreateWorktree,
 		listWorktreeOptions{},
+		openWorktreeOptions{},
 		newWorktreeOptions{
 			inspect:           git.InspectWorktree,
 			loadConfiguration: configurationLoader.Load,
@@ -297,6 +301,7 @@ func TestNewWorktreeCommandReportsNonGitRepository(t *testing.T) {
 				git.InspectWorktree,
 				git.CreateWorktree,
 				listWorktreeOptions{},
+				openWorktreeOptions{},
 				newWorktreeOptions{
 					listBranches:  git.ListLocalBranches,
 					isInteractive: func() bool { return test.isInteractive },
@@ -328,6 +333,7 @@ func TestNewWorktreeCommandReportsMissingBaseBranch(t *testing.T) {
 		git.InspectWorktree,
 		git.CreateWorktree,
 		listWorktreeOptions{},
+		openWorktreeOptions{},
 		newWorktreeOptions{},
 	)
 	command.SetOut(&stderr)
@@ -365,6 +371,7 @@ func TestNewWorktreeCommandReportsExistingBranch(t *testing.T) {
 		git.InspectWorktree,
 		git.CreateWorktree,
 		listWorktreeOptions{},
+		openWorktreeOptions{},
 		newWorktreeOptions{},
 	)
 	command.SetOut(&output)

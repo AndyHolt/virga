@@ -597,6 +597,7 @@ func TestNewCommandAtRoot(t *testing.T) {
 			return "/repo_feature", nil
 		},
 		listWorktreeOptions{},
+		openWorktreeOptions{},
 		newWorktreeOptions{},
 	)
 	command.SetOut(&output)
