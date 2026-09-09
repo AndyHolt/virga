@@ -21,18 +21,22 @@ JSON output is an object with a `worktrees` array. Each worktree contains
 `locked`, `lock_reason`, `prunable`, `prune_reason`, and `tmux` fields. The
 `tmux` object contains `session` and `status`.
 
-## Open an existing worktree
+## Open an existing branch
 
-Open a local branch that is already checked out in a Git worktree:
+Open an existing local branch in its Virga environment:
 
 ```sh
 virga open feature/login
 ```
 
-Virga reuses the existing worktree, ensures the deterministic tmux session for
-that worktree exists, and attaches or switches to that session when running
-interactively. It prints the branch, worktree path, `Worktree action: reused`,
-and `Tmux action: created` or `reused`.
+Virga reuses the branch's worktree when it is already checked out. If the local
+branch exists but has no worktree, Virga creates a sibling worktree such as
+`/projects/virga_feature-login` without creating a new branch. It then ensures
+the deterministic tmux session for that worktree exists, and attaches or
+switches to that session when running interactively.
+
+Output includes the branch, worktree path, `Worktree action: created` or
+`reused`, and `Tmux action: created` or `reused`.
 
 Skip tmux setup or leave the session detached with:
 
@@ -41,9 +45,8 @@ virga open feature/login --no-tmux
 virga open feature/login --no-attach
 ```
 
-This first `open` implementation does not create missing worktrees. If the local
-branch exists but is not checked out in a worktree, Virga reports that creating a
-worktree for an existing branch is not implemented yet.
+Configured files are materialized only when `virga open` creates a new worktree.
+Existing worktrees are never modified by file materialization.
 
 ## Create a worktree
 
