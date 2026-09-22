@@ -8,7 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-func TestBranchSelectorThemeUsesTerminalDefaultsAndANSIColors(t *testing.T) {
+func TestBranchSelectorThemeUsesTerminalDefaultsAndANSIColours(t *testing.T) {
 	theme := branchSelectorTheme()
 	assertTerminalDefault(t, theme.Focused.UnselectedOption)
 	for _, style := range []lipgloss.Style{
@@ -17,7 +17,7 @@ func TestBranchSelectorThemeUsesTerminalDefaultsAndANSIColors(t *testing.T) {
 		theme.Help.ShortKey,
 		theme.Help.FullKey,
 	} {
-		assertANSIColor(t, style, terminalAccent)
+		assertANSIColour(t, style, terminalAccent)
 	}
 	for _, style := range []lipgloss.Style{
 		theme.Help.Ellipsis,
@@ -26,11 +26,11 @@ func TestBranchSelectorThemeUsesTerminalDefaultsAndANSIColors(t *testing.T) {
 		theme.Help.FullDesc,
 		theme.Help.FullSeparator,
 	} {
-		assertANSIColor(t, style, terminalMuted)
+		assertANSIColour(t, style, terminalMuted)
 	}
-	borderColor := theme.Focused.Base.GetBorderLeftForeground()
-	if color, ok := borderColor.(lipgloss.ANSIColor); !ok || color != terminalAccent {
-		t.Errorf("border foreground = %v, want ANSI color %d", borderColor, terminalAccent)
+	borderColour := theme.Focused.Base.GetBorderLeftForeground()
+	if colour, ok := borderColour.(lipgloss.ANSIColor); !ok || colour != terminalAccent {
+		t.Errorf("border foreground = %v, want ANSI colour %d", borderColour, terminalAccent)
 	}
 	if !theme.Focused.SelectedOption.GetReverse() {
 		t.Error("selected option is not reverse video")
@@ -44,11 +44,11 @@ func assertTerminalDefault(t *testing.T, style lipgloss.Style) {
 	}
 }
 
-func assertANSIColor(t *testing.T, style lipgloss.Style, want lipgloss.ANSIColor) {
+func assertANSIColour(t *testing.T, style lipgloss.Style, want lipgloss.ANSIColor) {
 	t.Helper()
-	color, ok := style.GetForeground().(lipgloss.ANSIColor)
-	if !ok || color != want {
-		t.Errorf("foreground = %v, want ANSI color %d", style.GetForeground(), want)
+	colour, ok := style.GetForeground().(lipgloss.ANSIColor)
+	if !ok || colour != want {
+		t.Errorf("foreground = %v, want ANSI colour %d", style.GetForeground(), want)
 	}
 }
 

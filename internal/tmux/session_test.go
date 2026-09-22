@@ -537,7 +537,7 @@ func TestSessionNameUsesWorktreeDirectoryName(t *testing.T) {
 func TestSessionNameSanitizesTmuxTargetUnsafeCharacters(t *testing.T) {
 	name := SessionName("/repositories/main repository:feature api")
 	if name != "main-repository-feature-api" {
-		t.Fatalf("SessionName() = %q, want sanitized worktree directory name", name)
+		t.Fatalf("SessionName() = %q, want sanitised worktree directory name", name)
 	}
 	if strings.ContainsAny(name, ":/ ") {
 		t.Fatalf("SessionName() = %q, want no tmux target separators or whitespace", name)

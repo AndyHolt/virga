@@ -100,7 +100,7 @@ func TestNewWorktreeCommandCreatesFromSelectedBaseBranch(t *testing.T) {
 	}
 }
 
-func TestNewWorktreeCommandMaterializesConfiguredFilesBeforeTmux(t *testing.T) {
+func TestNewWorktreeCommandMaterialisesConfiguredFilesBeforeTmux(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("creating symlinks on Windows requires privileges")
 	}
@@ -140,7 +140,7 @@ tmux:
 		newWorktreeOptions{
 			inspect:           git.InspectWorktree,
 			loadConfiguration: configurationLoader.Load,
-			materializeFiles:  files.Materialize,
+			materialiseFiles:  files.Materialise,
 			createSession: func(_ context.Context, options tmux.CreateSessionOptions) (string, error) {
 				sessionOptions = options
 				assertFileContents(t, filepath.Join(options.WorktreeRoot, ".env"), "TOKEN=value\n")
@@ -200,7 +200,7 @@ func TestNewWorktreeCommandReportsConfiguredFileCollision(t *testing.T) {
 		newWorktreeOptions{
 			inspect:           git.InspectWorktree,
 			loadConfiguration: configurationLoader.Load,
-			materializeFiles:  files.Materialize,
+			materialiseFiles:  files.Materialise,
 			createSession: func(context.Context, tmux.CreateSessionOptions) (string, error) {
 				t.Fatal("tmux session created after configured file collision")
 				return "", nil

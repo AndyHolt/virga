@@ -22,7 +22,7 @@ type openWorktreeOptions struct {
 	addWorktree       existingBranchWorktreeAdder
 	isInteractive     terminalDetector
 	loadConfiguration configurationLoader
-	materializeFiles  fileMaterializer
+	materialiseFiles  fileMaterialiser
 	ensureSession     tmuxSessionEnsurer
 	attachSession     tmuxSessionAttacher
 }
@@ -69,8 +69,8 @@ func newOpenCmd(getwd func() (string, error), options openWorktreeOptions) *cobr
 			worktreeAction := "reused"
 			setupTmux := !noTmux
 			createdWorktree := !found
-			materializeFiles := createdWorktree && options.materializeFiles != nil
-			needsConfiguration := setupTmux || materializeFiles
+			materialiseFiles := createdWorktree && options.materialiseFiles != nil
+			needsConfiguration := setupTmux || materialiseFiles
 
 			if createdWorktree {
 				if options.addWorktree == nil {
@@ -115,13 +115,13 @@ func newOpenCmd(getwd func() (string, error), options openWorktreeOptions) *cobr
 			}
 
 			output := fmt.Sprintf("Branch: %s\nWorktree: %s\nWorktree action: %s\n", branch, worktree.Path, worktreeAction)
-			if materializeFiles && len(configuration.Files) > 0 {
-				if err := options.materializeFiles(cmd.Context(), files.Options{
+			if materialiseFiles && len(configuration.Files) > 0 {
+				if err := options.materialiseFiles(cmd.Context(), files.Options{
 					RepositoryRoot: repositoryRoot,
 					WorktreeRoot:   worktree.Path,
 					Entries:        configuration.Files,
 				}); err != nil {
-					return fmt.Errorf("created worktree for branch %q at %q, but materialize files: %w", branch, worktree.Path, err)
+					return fmt.Errorf("created worktree for branch %q at %q, but materialise files: %w", branch, worktree.Path, err)
 				}
 			}
 

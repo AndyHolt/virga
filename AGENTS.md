@@ -32,7 +32,7 @@ make run     # Run the CLI from source
 make test    # Run tests with race detection and coverage
 make fmt     # Format Go source
 make lint    # Run golangci-lint
-make tidy    # Synchronize go.mod and go.sum
+make tidy    # Synchronise go.mod and go.sum
 ```
 
 Before presenting work for review, run at least:
@@ -57,7 +57,7 @@ Work **one commit-sized change at a time, but do not create the commit**.
 
 A commit-sized change should be a small, coherent unit that can be reviewed independently. Once that unit is implemented and validated:
 
-1. Stop and summarize what changed.
+1. Stop and summarise what changed.
 2. List the checks that were run and their results.
 3. Call out assumptions, trade-offs, and anything not tested.
 4. Leave all changes uncommitted for review.
@@ -82,7 +82,7 @@ Follow idiomatic Go and the conventions documented by the Go project.
 - Make side effects explicit and injectable where practical, especially command execution, filesystem access, environment variables, time, and terminal detection.
 - Prefer Git's stable machine-readable or porcelain formats over parsing human-oriented output.
 - Avoid global mutable state. Cobra command construction should remain testable and should not depend unnecessarily on package globals.
-- Preserve backward compatibility for documented CLI flags, output formats, configuration keys, and exit behavior unless a breaking change is deliberate and documented.
+- Preserve backward compatibility for documented CLI flags, output formats, configuration keys, and exit behaviour unless a breaking change is deliberate and documented.
 
 ### Correctness and errors
 
@@ -99,7 +99,8 @@ Follow idiomatic Go and the conventions documented by the Go project.
 ### Style and documentation
 
 - Format all Go code with `gofmt`; use `goimports` if it is adopted by the repository.
-- Follow standard Go naming: initialisms such as `ID`, `URL`, and `CLI` remain consistently capitalized.
+- Follow standard Go naming: initialisms such as `ID`, `URL`, and `CLI` remain consistently capitalised.
+- Use British spelling in prose, identifiers, and messages. Retain American spelling only for established programming terminology, external APIs, or standards where British spelling would be confusing.
 - Keep functions short enough to understand, but do not split code into trivial wrappers without benefit.
 - Comments should explain intent, constraints, and non-obvious decisions rather than restate the code.
 - Exported identifiers require useful Go documentation comments.
@@ -109,22 +110,22 @@ Follow idiomatic Go and the conventions documented by the Go project.
 
 ### Testing
 
-- Add or update tests for every behavioral change and bug fix.
+- Add or update tests for every behavioural change and bug fix.
 - Prefer table-driven tests for multiple input/output cases.
-- Test observable behavior rather than implementation details.
+- Test observable behaviour rather than implementation details.
 - Use temporary directories (`t.TempDir`) and isolated repositories for filesystem and Git integration tests.
 - Never rely on the developer's global Git configuration, current branches, tmux server, home directory, or existing worktrees.
-- Use dependency injection or controlled test binaries for external-command unit tests. Add focused integration tests where exercising real Git behavior provides meaningful confidence.
+- Use dependency injection or controlled test binaries for external-command unit tests. Add focused integration tests where exercising real Git behaviour provides meaningful confidence.
 - Mark test helpers with `t.Helper()` and use `t.Cleanup()` for cleanup.
-- Keep tests deterministic and safe to run in parallel. Do not add sleeps to resolve synchronization issues.
-- Test successful behavior, malformed input, external-command failures, and important edge cases such as detached or locked worktrees.
+- Keep tests deterministic and safe to run in parallel. Do not add sleeps to resolve synchronisation issues.
+- Test successful behaviour, malformed input, external-command failures, and important edge cases such as detached or locked worktrees.
 - Run tests with the race detector via `make test`.
 
 ## CLI standards
 
 - Commands and flags should have concise help text and practical examples.
-- Do not advertise unimplemented behavior in user-facing help or documentation.
-- Prefer predictable, script-friendly behavior. Human-readable output should be stable where practical, and structured output such as `--json` should have an explicitly defined schema.
+- Do not advertise unimplemented behaviour in user-facing help or documentation.
+- Prefer predictable, script-friendly behaviour. Human-readable output should be stable where practical, and structured output such as `--json` should have an explicitly defined schema.
 - Avoid prompts in non-interactive environments. Destructive actions should require explicit intent and offer a non-interactive mode when appropriate.
 - Respect configuration precedence consistently: explicit flags, environment variables, configuration files, then defaults. Document any deviations.
 - Ensure commands work from nested directories inside a repository when that is a reasonable user expectation.
@@ -135,7 +136,7 @@ Follow idiomatic Go and the conventions documented by the Go project.
 - Pass subprocess arguments as an argument vector; avoid invoking a shell unless shell semantics are genuinely required.
 - Do not log secrets, environment values, tokens, or private configuration.
 - Use restrictive permissions for files that may contain sensitive data.
-- Prefer cross-platform Go APIs. When functionality depends on Git, tmux, or operating-system-specific behavior, detect missing prerequisites and return clear errors.
+- Prefer cross-platform Go APIs. When functionality depends on Git, tmux, or operating-system-specific behaviour, detect missing prerequisites and return clear errors.
 - Consider paths containing spaces, Unicode, symlinks, and platform-specific separators.
 
 ## Agent coding standards
@@ -143,9 +144,9 @@ Follow idiomatic Go and the conventions documented by the Go project.
 - Read relevant code, tests, configuration, and documentation before proposing changes.
 - Confirm the requested scope and avoid unrelated refactoring or formatting churn.
 - Prefer the smallest change that completely solves the stated problem.
-- Do not fabricate APIs, command behavior, test results, or repository state. Verify them directly.
-- Keep README files, CLI help, examples, configuration documentation, and this file consistent with behavior.
-- If requirements are ambiguous and the choice would materially affect behavior or architecture, ask before implementing.
+- Do not fabricate APIs, command behaviour, test results, or repository state. Verify them directly.
+- Keep README files, CLI help, examples, configuration documentation, and this file consistent with behaviour.
+- If requirements are ambiguous and the choice would materially affect behaviour or architecture, ask before implementing.
 - Record assumptions when a minor ambiguity does not justify blocking progress.
 - Do not introduce generated files, binaries, editor metadata, or local configuration unless they are intentionally part of the project.
 - Review the final diff and `git status` before handing work back.
@@ -155,10 +156,10 @@ Follow idiomatic Go and the conventions documented by the Go project.
 
 A commit-sized change is ready for maintainer review when:
 
-- The requested behavior is implemented without unrelated changes.
+- The requested behaviour is implemented without unrelated changes.
 - Relevant tests have been added or updated and pass.
 - Formatting, linting, race-enabled tests, and applicable repository hooks pass.
-- User-facing behavior and documentation agree.
+- User-facing behaviour and documentation agree.
 - Dependency files are tidy.
 - The diff has been reviewed for correctness, security, and accidental files.
-- Changes remain uncommitted and are summarized for the maintainer.
+- Changes remain uncommitted and are summarised for the maintainer.

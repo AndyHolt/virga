@@ -35,7 +35,7 @@ func selectHuhBranch(input io.Reader, prompt io.Writer, branches []string) (stri
 	return selected, nil
 }
 
-// branchSelectorTheme uses terminal-default colors for text, with ANSI palette
+// branchSelectorTheme uses terminal-default colours for text, with ANSI palette
 // entries for its accent and muted help text, so it remains legible across themes.
 func branchSelectorTheme() *huh.Theme {
 	theme := huh.ThemeBase()

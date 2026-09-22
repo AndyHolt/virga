@@ -10,19 +10,19 @@ import (
 	"testing"
 )
 
-func TestMaterializeCopiesFilesWithSpacesAndUnicode(t *testing.T) {
+func TestMaterialiseCopiesFilesWithSpacesAndUnicode(t *testing.T) {
 	repository := t.TempDir()
 	worktree := t.TempDir()
 	source := filepath.Join("config space", "local-å.yaml")
 	writeFile(t, filepath.Join(repository, source), "secret: true\n", 0o640)
 
-	err := Materialize(context.Background(), Options{
+	err := Materialise(context.Background(), Options{
 		RepositoryRoot: repository,
 		WorktreeRoot:   worktree,
 		Entries:        []Entry{{Source: source, Mode: ModeCopy}},
 	})
 	if err != nil {
-		t.Fatalf("Materialize() error = %v", err)
+		t.Fatalf("Materialise() error = %v", err)
 	}
 
 	destination := filepath.Join(worktree, source)
@@ -42,7 +42,7 @@ func TestMaterializeCopiesFilesWithSpacesAndUnicode(t *testing.T) {
 	}
 }
 
-func TestMaterializeCreatesRelativeSymlinks(t *testing.T) {
+func TestMaterialiseCreatesRelativeSymlinks(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("creating symlinks on Windows requires privileges")
 	}
@@ -50,13 +50,13 @@ func TestMaterializeCreatesRelativeSymlinks(t *testing.T) {
 	worktree := t.TempDir()
 	writeFile(t, filepath.Join(repository, ".env"), "TOKEN=value\n", 0o600)
 
-	err := Materialize(context.Background(), Options{
+	err := Materialise(context.Background(), Options{
 		RepositoryRoot: repository,
 		WorktreeRoot:   worktree,
 		Entries:        []Entry{{Source: ".env", Mode: ModeSymlink}},
 	})
 	if err != nil {
-		t.Fatalf("Materialize() error = %v", err)
+		t.Fatalf("Materialise() error = %v", err)
 	}
 
 	destination := filepath.Join(worktree, ".env")
@@ -83,7 +83,7 @@ func TestMaterializeCreatesRelativeSymlinks(t *testing.T) {
 	}
 }
 
-func TestMaterializeCreatesRelativeDirectorySymlinks(t *testing.T) {
+func TestMaterialiseCreatesRelativeDirectorySymlinks(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("creating symlinks on Windows requires privileges")
 	}
@@ -94,13 +94,13 @@ func TestMaterializeCreatesRelativeDirectorySymlinks(t *testing.T) {
 		t.Fatalf("create source directory: %v", err)
 	}
 
-	err := Materialize(context.Background(), Options{
+	err := Materialise(context.Background(), Options{
 		RepositoryRoot: repository,
 		WorktreeRoot:   worktree,
 		Entries:        []Entry{{Source: source, Mode: ModeSymlink}},
 	})
 	if err != nil {
-		t.Fatalf("Materialize() error = %v", err)
+		t.Fatalf("Materialise() error = %v", err)
 	}
 
 	destination := filepath.Join(worktree, source)
@@ -136,29 +136,29 @@ func TestMaterializeCreatesRelativeDirectorySymlinks(t *testing.T) {
 	}
 }
 
-func TestMaterializeRejectsDirectoryCopy(t *testing.T) {
+func TestMaterialiseRejectsDirectoryCopy(t *testing.T) {
 	repository := t.TempDir()
 	worktree := t.TempDir()
 	if err := os.Mkdir(filepath.Join(repository, "cache"), 0o755); err != nil {
 		t.Fatalf("create source directory: %v", err)
 	}
 
-	err := Materialize(context.Background(), Options{
+	err := Materialise(context.Background(), Options{
 		RepositoryRoot: repository,
 		WorktreeRoot:   worktree,
 		Entries:        []Entry{{Source: "cache", Mode: ModeCopy}},
 	})
 	if err == nil || !strings.Contains(err.Error(), "regular file for copy mode") {
-		t.Fatalf("Materialize() error = %v, want directory copy rejection", err)
+		t.Fatalf("Materialise() error = %v, want directory copy rejection", err)
 	}
 }
 
-func TestMaterializePreflightsBeforeChangingFiles(t *testing.T) {
+func TestMaterialisePreflightsBeforeChangingFiles(t *testing.T) {
 	repository := t.TempDir()
 	worktree := t.TempDir()
 	writeFile(t, filepath.Join(repository, "present.env"), "present\n", 0o600)
 
-	err := Materialize(context.Background(), Options{
+	err := Materialise(context.Background(), Options{
 		RepositoryRoot: repository,
 		WorktreeRoot:   worktree,
 		Entries: []Entry{
@@ -167,41 +167,41 @@ func TestMaterializePreflightsBeforeChangingFiles(t *testing.T) {
 		},
 	})
 	if err == nil || !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("Materialize() error = %v, want missing source error", err)
+		t.Fatalf("Materialise() error = %v, want missing source error", err)
 	}
 	if _, err := os.Lstat(filepath.Join(worktree, "present.env")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("destination for valid entry exists after failed preflight: %v", err)
 	}
 }
 
-func TestMaterializeRejectsPathTraversal(t *testing.T) {
+func TestMaterialiseRejectsPathTraversal(t *testing.T) {
 	repository := t.TempDir()
 	worktree := t.TempDir()
 	writeFile(t, filepath.Join(repository, "safe.env"), "safe\n", 0o600)
 
-	err := Materialize(context.Background(), Options{
+	err := Materialise(context.Background(), Options{
 		RepositoryRoot: repository,
 		WorktreeRoot:   worktree,
 		Entries:        []Entry{{Source: "../safe.env", Mode: ModeCopy}},
 	})
 	if err == nil || !strings.Contains(err.Error(), "within the repository") {
-		t.Fatalf("Materialize() error = %v, want path traversal error", err)
+		t.Fatalf("Materialise() error = %v, want path traversal error", err)
 	}
 }
 
-func TestMaterializeRejectsExistingDestination(t *testing.T) {
+func TestMaterialiseRejectsExistingDestination(t *testing.T) {
 	repository := t.TempDir()
 	worktree := t.TempDir()
 	writeFile(t, filepath.Join(repository, ".env"), "repository\n", 0o600)
 	writeFile(t, filepath.Join(worktree, ".env"), "worktree\n", 0o600)
 
-	err := Materialize(context.Background(), Options{
+	err := Materialise(context.Background(), Options{
 		RepositoryRoot: repository,
 		WorktreeRoot:   worktree,
 		Entries:        []Entry{{Source: ".env", Mode: ModeCopy}},
 	})
 	if err == nil || !strings.Contains(err.Error(), "already exists") {
-		t.Fatalf("Materialize() error = %v, want existing destination error", err)
+		t.Fatalf("Materialise() error = %v, want existing destination error", err)
 	}
 	contents, err := os.ReadFile(filepath.Join(worktree, ".env"))
 	if err != nil {
@@ -212,12 +212,12 @@ func TestMaterializeRejectsExistingDestination(t *testing.T) {
 	}
 }
 
-func TestMaterializeRejectsDuplicateDestinations(t *testing.T) {
+func TestMaterialiseRejectsDuplicateDestinations(t *testing.T) {
 	repository := t.TempDir()
 	worktree := t.TempDir()
 	writeFile(t, filepath.Join(repository, "app.env"), "app\n", 0o600)
 
-	err := Materialize(context.Background(), Options{
+	err := Materialise(context.Background(), Options{
 		RepositoryRoot: repository,
 		WorktreeRoot:   worktree,
 		Entries: []Entry{
@@ -226,27 +226,27 @@ func TestMaterializeRejectsDuplicateDestinations(t *testing.T) {
 		},
 	})
 	if err == nil || !strings.Contains(err.Error(), "also configured") {
-		t.Fatalf("Materialize() error = %v, want duplicate destination error", err)
+		t.Fatalf("Materialise() error = %v, want duplicate destination error", err)
 	}
 }
 
-func TestMaterializeRejectsFileDestinationParent(t *testing.T) {
+func TestMaterialiseRejectsFileDestinationParent(t *testing.T) {
 	repository := t.TempDir()
 	worktree := t.TempDir()
 	writeFile(t, filepath.Join(repository, "config", "local.yaml"), "value\n", 0o600)
 	writeFile(t, filepath.Join(worktree, "config"), "not a directory\n", 0o600)
 
-	err := Materialize(context.Background(), Options{
+	err := Materialise(context.Background(), Options{
 		RepositoryRoot: repository,
 		WorktreeRoot:   worktree,
 		Entries:        []Entry{{Source: filepath.Join("config", "local.yaml"), Mode: ModeCopy}},
 	})
 	if err == nil || !strings.Contains(err.Error(), "not a directory") {
-		t.Fatalf("Materialize() error = %v, want destination parent error", err)
+		t.Fatalf("Materialise() error = %v, want destination parent error", err)
 	}
 }
 
-func TestMaterializeRejectsSymlinkDestinationParent(t *testing.T) {
+func TestMaterialiseRejectsSymlinkDestinationParent(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("creating symlinks on Windows requires privileges")
 	}
@@ -258,13 +258,13 @@ func TestMaterializeRejectsSymlinkDestinationParent(t *testing.T) {
 		t.Fatalf("create destination parent symlink: %v", err)
 	}
 
-	err := Materialize(context.Background(), Options{
+	err := Materialise(context.Background(), Options{
 		RepositoryRoot: repository,
 		WorktreeRoot:   worktree,
 		Entries:        []Entry{{Source: filepath.Join("config", "local.yaml"), Mode: ModeCopy}},
 	})
 	if err == nil || !strings.Contains(err.Error(), "is a symlink") {
-		t.Fatalf("Materialize() error = %v, want symlink parent error", err)
+		t.Fatalf("Materialise() error = %v, want symlink parent error", err)
 	}
 	if _, err := os.Lstat(filepath.Join(outside, "local.yaml")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("destination was created outside worktree: %v", err)

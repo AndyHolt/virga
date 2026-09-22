@@ -161,7 +161,7 @@ func TestParseWorktreeListRejectsMalformedOutput(t *testing.T) {
 		{name: "empty worktree path", output: "worktree \x00", wantErr: "empty worktree path"},
 		{name: "empty head", output: "worktree /repo\x00HEAD \x00", wantErr: "empty HEAD"},
 		{name: "empty branch", output: "worktree /repo\x00branch \x00", wantErr: "empty branch"},
-		{name: "unrecognized field", output: "worktree /repo\x00unknown value\x00", wantErr: "unrecognized field"},
+		{name: "unrecognised field", output: "worktree /repo\x00unknown value\x00", wantErr: "unrecognised field"},
 	}
 
 	for _, test := range tests {

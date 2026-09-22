@@ -169,7 +169,7 @@ func TestNewWorktreeCommandCreatesTmuxSession(t *testing.T) {
 	}
 }
 
-func TestNewWorktreeCommandMaterializesFilesBeforeTmuxSession(t *testing.T) {
+func TestNewWorktreeCommandMaterialisesFilesBeforeTmuxSession(t *testing.T) {
 	var output bytes.Buffer
 	var order []string
 	configuration := config.Config{
@@ -192,8 +192,8 @@ func TestNewWorktreeCommandMaterializesFilesBeforeTmuxSession(t *testing.T) {
 			loadConfiguration: func(context.Context, string, string) (config.Config, error) {
 				return configuration, nil
 			},
-			materializeFiles: func(_ context.Context, options files.Options) error {
-				order = append(order, "materialize files")
+			materialiseFiles: func(_ context.Context, options files.Options) error {
+				order = append(order, "materialise files")
 				if options.RepositoryRoot != "/repo" || options.WorktreeRoot != "/worktrees/repo_feature" {
 					t.Errorf("file options = %#v, want repository and worktree roots", options)
 				}
@@ -215,7 +215,7 @@ func TestNewWorktreeCommandMaterializesFilesBeforeTmuxSession(t *testing.T) {
 	if err := command.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	wantOrder := []string{"create worktree", "materialize files", "create tmux"}
+	wantOrder := []string{"create worktree", "materialise files", "create tmux"}
 	if !reflect.DeepEqual(order, wantOrder) {
 		t.Errorf("operation order = %#v, want %#v", order, wantOrder)
 	}
@@ -224,8 +224,8 @@ func TestNewWorktreeCommandMaterializesFilesBeforeTmuxSession(t *testing.T) {
 	}
 }
 
-func TestNewWorktreeCommandReportsFileMaterializationFailureAfterCreation(t *testing.T) {
-	materializeErr := errors.New("copy failed")
+func TestNewWorktreeCommandReportsFileMaterialisationFailureAfterCreation(t *testing.T) {
+	materialiseErr := errors.New("copy failed")
 	command := newWorktreeCmd(
 		func() (string, error) { return "/repo", nil },
 		func(context.Context, string, string, string) (string, error) { return "/repo_feature", nil },
@@ -236,9 +236,9 @@ func TestNewWorktreeCommandReportsFileMaterializationFailureAfterCreation(t *tes
 			loadConfiguration: func(context.Context, string, string) (config.Config, error) {
 				return config.Config{Files: []files.Entry{{Source: ".env", Mode: files.ModeCopy}}}, nil
 			},
-			materializeFiles: func(context.Context, files.Options) error { return materializeErr },
+			materialiseFiles: func(context.Context, files.Options) error { return materialiseErr },
 			createSession: func(context.Context, tmux.CreateSessionOptions) (string, error) {
-				t.Fatal("tmux session created after file materialization failure")
+				t.Fatal("tmux session created after file materialisation failure")
 				return "", nil
 			},
 		},
@@ -246,8 +246,8 @@ func TestNewWorktreeCommandReportsFileMaterializationFailureAfterCreation(t *tes
 	command.SetArgs([]string{"feature"})
 
 	err := command.Execute()
-	if !errors.Is(err, materializeErr) {
-		t.Fatalf("Execute() error = %v, want wrapped %v", err, materializeErr)
+	if !errors.Is(err, materialiseErr) {
+		t.Fatalf("Execute() error = %v, want wrapped %v", err, materialiseErr)
 	}
 	if !strings.Contains(err.Error(), "created branch \"feature\" and worktree \"/repo_feature\"") {
 		t.Fatalf("Execute() error = %v, want created resources", err)
@@ -313,8 +313,8 @@ func TestNewWorktreeCommandNoTmuxSkipsTmuxSetup(t *testing.T) {
 	}
 }
 
-func TestNewWorktreeCommandNoTmuxStillMaterializesFiles(t *testing.T) {
-	var materialized bool
+func TestNewWorktreeCommandNoTmuxStillMaterialisesFiles(t *testing.T) {
+	var materialised bool
 	command := newWorktreeCmd(
 		func() (string, error) { return "/repo", nil },
 		func(context.Context, string, string, string) (string, error) { return "/repo_feature", nil },
@@ -325,8 +325,8 @@ func TestNewWorktreeCommandNoTmuxStillMaterializesFiles(t *testing.T) {
 			loadConfiguration: func(context.Context, string, string) (config.Config, error) {
 				return config.Config{Files: []files.Entry{{Source: ".env", Mode: files.ModeCopy}}}, nil
 			},
-			materializeFiles: func(context.Context, files.Options) error {
-				materialized = true
+			materialiseFiles: func(context.Context, files.Options) error {
+				materialised = true
 				return nil
 			},
 			createSession: func(context.Context, tmux.CreateSessionOptions) (string, error) {
@@ -340,8 +340,8 @@ func TestNewWorktreeCommandNoTmuxStillMaterializesFiles(t *testing.T) {
 	if err := command.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if !materialized {
-		t.Fatal("files were not materialized")
+	if !materialised {
+		t.Fatal("files were not materialised")
 	}
 }
 
