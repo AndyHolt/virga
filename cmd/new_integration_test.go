@@ -117,17 +117,17 @@ func TestNewWorktreeCommandMaterialisesConfiguredFilesBeforeTmux(t *testing.T) {
 	}
 	if err := os.WriteFile(filepath.Join(root, ".virga.yaml"), []byte(`files:
   - source: .env
-	mode: symlink
+    mode: symlink
   - source: config/local.yaml
-	mode: copy
+    mode: copy
 setup:
   commands:
-	- printf setup > .setup-ran
+    - printf setup > .setup-ran
 tmux:
   windows:
-	- name: shell
-	  panes:
-		- command: test -f .env
+    - name: shell
+      panes:
+        - command: test -f .env
 `), 0o644); err != nil {
 		t.Fatalf("write repository config: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestNewWorktreeCommandReportsConfiguredFileCollision(t *testing.T) {
 	cliRunGit(t, "-C", root, "commit", "-m", "add tracked file")
 	if err := os.WriteFile(filepath.Join(root, ".virga.yaml"), []byte(`files:
   - source: tracked.env
-	mode: copy
+    mode: copy
 `), 0o644); err != nil {
 		t.Fatalf("write repository config: %v", err)
 	}
@@ -237,9 +237,9 @@ func TestNewWorktreeCommandCreatesTmuxSessionFromRepositoryConfig(t *testing.T) 
 	root := newCLITestRepository(t)
 	if err := os.WriteFile(filepath.Join(root, ".virga.yaml"), []byte(`tmux:
   windows:
-	- name: editor
-	  panes:
-		- command: nvim
+    - name: editor
+      panes:
+        - command: nvim
 `), 0o644); err != nil {
 		t.Fatalf("write repository config: %v", err)
 	}

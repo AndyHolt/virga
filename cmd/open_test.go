@@ -683,12 +683,12 @@ func TestOpenCommandCreatesGitWorktreeForExistingBranch(t *testing.T) {
 	}
 	if err := os.WriteFile(filepath.Join(root, ".virga.yaml"), []byte(`files:
   - source: .env
-	mode: copy
+    mode: copy
 tmux:
   windows:
-	- name: shell
-	  panes:
-		- command: make test
+    - name: shell
+      panes:
+        - command: make test
 `), 0o644); err != nil {
 		t.Fatalf("write repository config: %v", err)
 	}
@@ -761,7 +761,7 @@ func TestOpenCommandRetainsCreatedGitWorktreeAfterFileMaterialisationFailure(t *
 	cliRunGit(t, "-C", root, "branch", "feature")
 	if err := os.WriteFile(filepath.Join(root, ".virga.yaml"), []byte(`files:
   - source: tracked.env
-	mode: copy
+    mode: copy
 `), 0o644); err != nil {
 		t.Fatalf("write repository config: %v", err)
 	}
