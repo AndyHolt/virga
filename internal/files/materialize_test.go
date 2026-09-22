@@ -83,6 +83,76 @@ func TestMaterializeCreatesRelativeSymlinks(t *testing.T) {
 	}
 }
 
+func TestMaterializeCreatesRelativeDirectorySymlinks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("creating symlinks on Windows requires privileges")
+	}
+	repository := t.TempDir()
+	worktree := t.TempDir()
+	source := "cache"
+	if err := os.Mkdir(filepath.Join(repository, source), 0o755); err != nil {
+		t.Fatalf("create source directory: %v", err)
+	}
+
+	err := Materialize(context.Background(), Options{
+		RepositoryRoot: repository,
+		WorktreeRoot:   worktree,
+		Entries:        []Entry{{Source: source, Mode: ModeSymlink}},
+	})
+	if err != nil {
+		t.Fatalf("Materialize() error = %v", err)
+	}
+
+	destination := filepath.Join(worktree, source)
+	target, err := os.Readlink(destination)
+	if err != nil {
+		t.Fatalf("read directory symlink: %v", err)
+	}
+	wantTarget, err := filepath.Rel(filepath.Dir(destination), filepath.Join(repository, source))
+	if err != nil {
+		t.Fatalf("calculate relative target: %v", err)
+	}
+	if target != wantTarget {
+		t.Errorf("symlink target = %q, want %q", target, wantTarget)
+	}
+	info, err := os.Stat(destination)
+	if err != nil {
+		t.Fatalf("stat directory symlink: %v", err)
+	}
+	if !info.IsDir() {
+		t.Errorf("symlink target is not a directory")
+	}
+
+	file := filepath.Join(destination, "dataset.bin")
+	if err := os.WriteFile(file, []byte("shared data"), 0o600); err != nil {
+		t.Fatalf("write through directory symlink: %v", err)
+	}
+	contents, err := os.ReadFile(filepath.Join(repository, source, "dataset.bin"))
+	if err != nil {
+		t.Fatalf("read source directory after write: %v", err)
+	}
+	if got, want := string(contents), "shared data"; got != want {
+		t.Errorf("source contents = %q, want %q", got, want)
+	}
+}
+
+func TestMaterializeRejectsDirectoryCopy(t *testing.T) {
+	repository := t.TempDir()
+	worktree := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repository, "cache"), 0o755); err != nil {
+		t.Fatalf("create source directory: %v", err)
+	}
+
+	err := Materialize(context.Background(), Options{
+		RepositoryRoot: repository,
+		WorktreeRoot:   worktree,
+		Entries:        []Entry{{Source: "cache", Mode: ModeCopy}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "regular file for copy mode") {
+		t.Fatalf("Materialize() error = %v, want directory copy rejection", err)
+	}
+}
+
 func TestMaterializePreflightsBeforeChangingFiles(t *testing.T) {
 	repository := t.TempDir()
 	worktree := t.TempDir()

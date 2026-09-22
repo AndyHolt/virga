@@ -82,9 +82,9 @@ branches that already exist.
 
 ### Configured files
 
-Virga can materialize repository-local files into each new worktree before tmux
-starts. This is intended for files such as untracked local environment files that
-startup commands need:
+Virga can materialize repository-local paths into each new worktree before tmux
+starts. This is intended for untracked local environment files and shared,
+Git-ignored data caches that startup commands need:
 
 ```yaml
 files:
@@ -92,14 +92,19 @@ files:
     mode: symlink
   - source: config/local.yaml
     mode: copy
+  - source: cache
+    mode: symlink
 ```
 
 Each `source` is relative to the primary repository root and is created at the
 same relative path in the new worktree. `mode` must be either `copy` or
-`symlink`. Symlinks use relative targets where possible.
+`symlink`. Copy sources must be regular files. Symlink sources may be regular
+files or directories, and use relative targets where possible. A symlinked
+directory is shared: files created, changed, or removed through it are visible
+from the primary repository and every worktree that links it.
 
-Configured file paths must stay inside the primary repository and destination
-paths must stay inside the new worktree. Virga rejects existing destinations by
+Configured paths must stay inside the primary repository and destination paths
+must stay inside the new worktree. Virga rejects existing destinations by
 default and preflights all configured entries before copying or linking any of
 them. If provisioning fails after Git creates the branch and worktree, Virga
 keeps those resources and reports what was created rather than deleting them.

@@ -1,4 +1,4 @@
-// Package files materializes repository-managed files into Virga worktrees.
+// Package files materializes repository-managed paths into Virga worktrees.
 package files
 
 import (
@@ -11,25 +11,26 @@ import (
 	"strings"
 )
 
-// Mode describes how a repository file should appear in a new worktree.
+// Mode describes how a repository path should appear in a new worktree.
 type Mode string
 
 const (
-	// ModeCopy copies file contents into the worktree.
+	// ModeCopy copies a regular file into the worktree.
 	ModeCopy Mode = "copy"
-	// ModeSymlink creates a symlink in the worktree that points at the repository file.
+	// ModeSymlink creates a symlink in the worktree that points at a regular file or directory in the repository.
 	ModeSymlink Mode = "symlink"
 )
 
-// Entry describes one repository file to materialize into a worktree. Source is
+// Entry describes one repository path to materialize into a worktree. Source is
 // relative to the primary repository root and is also used as the worktree
-// destination path.
+// destination path. Copy entries require a regular-file source; symlink entries
+// also allow directory sources.
 type Entry struct {
 	Source string
 	Mode   Mode
 }
 
-// Options describes a file materialization operation.
+// Options describes a path materialization operation.
 type Options struct {
 	RepositoryRoot string
 	WorktreeRoot   string
@@ -45,7 +46,7 @@ type plannedEntry struct {
 	permission  os.FileMode
 }
 
-// Materialize copies or links configured files from the primary repository into
+// Materialize copies or links configured paths from the primary repository into
 // a worktree. All entries are validated before any filesystem changes are made.
 func Materialize(ctx context.Context, options Options) error {
 	planned, err := preflight(options)
@@ -122,8 +123,15 @@ func preflight(options Options) ([]plannedEntry, error) {
 		if err != nil {
 			return nil, fmt.Errorf("stat source for files[%d] %q: %w", index, entry.Source, err)
 		}
-		if !sourceInfo.Mode().IsRegular() {
-			return nil, fmt.Errorf("validate files[%d] %q: source must be a regular file", index, entry.Source)
+		switch entry.Mode {
+		case ModeCopy:
+			if !sourceInfo.Mode().IsRegular() {
+				return nil, fmt.Errorf("validate files[%d] %q: source must be a regular file for copy mode", index, entry.Source)
+			}
+		case ModeSymlink:
+			if !sourceInfo.Mode().IsRegular() && !sourceInfo.IsDir() {
+				return nil, fmt.Errorf("validate files[%d] %q: source must be a regular file or directory for symlink mode", index, entry.Source)
+			}
 		}
 		if _, err := os.Lstat(destination); err == nil {
 			return nil, fmt.Errorf("validate files[%d] %q: destination %q already exists", index, entry.Source, destination)
