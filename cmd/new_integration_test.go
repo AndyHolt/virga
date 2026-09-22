@@ -17,6 +17,7 @@ import (
 	"github.com/AndyHolt/virga/internal/config"
 	"github.com/AndyHolt/virga/internal/files"
 	"github.com/AndyHolt/virga/internal/git"
+	"github.com/AndyHolt/virga/internal/setup"
 	"github.com/AndyHolt/virga/internal/tmux"
 )
 
@@ -102,7 +103,7 @@ func TestNewWorktreeCommandCreatesFromSelectedBaseBranch(t *testing.T) {
 
 func TestNewWorktreeCommandMaterialisesConfiguredFilesBeforeTmux(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("creating symlinks on Windows requires privileges")
+		t.Skip("creating symlinks and running POSIX shell commands on Windows requires additional setup")
 	}
 	root := newCLITestRepository(t)
 	if err := os.WriteFile(filepath.Join(root, ".env"), []byte("TOKEN=value\n"), 0o600); err != nil {
@@ -116,14 +117,17 @@ func TestNewWorktreeCommandMaterialisesConfiguredFilesBeforeTmux(t *testing.T) {
 	}
 	if err := os.WriteFile(filepath.Join(root, ".virga.yaml"), []byte(`files:
   - source: .env
-    mode: symlink
+	mode: symlink
   - source: config/local.yaml
-    mode: copy
+	mode: copy
+setup:
+  commands:
+	- printf setup > .setup-ran
 tmux:
   windows:
-    - name: shell
-      panes:
-        - command: test -f .env
+	- name: shell
+	  panes:
+		- command: test -f .env
 `), 0o644); err != nil {
 		t.Fatalf("write repository config: %v", err)
 	}
@@ -141,10 +145,12 @@ tmux:
 			inspect:           git.InspectWorktree,
 			loadConfiguration: configurationLoader.Load,
 			materialiseFiles:  files.Materialise,
+			runSetup:          setup.Run,
 			createSession: func(_ context.Context, options tmux.CreateSessionOptions) (string, error) {
 				sessionOptions = options
 				assertFileContents(t, filepath.Join(options.WorktreeRoot, ".env"), "TOKEN=value\n")
 				assertFileContents(t, filepath.Join(options.WorktreeRoot, "config", "local.yaml"), "debug: true\n")
+				assertFileContents(t, filepath.Join(options.WorktreeRoot, ".setup-ran"), "setup")
 				return "repository_configured-files", nil
 			},
 			isInteractive: func() bool { return true },
@@ -184,7 +190,7 @@ func TestNewWorktreeCommandReportsConfiguredFileCollision(t *testing.T) {
 	cliRunGit(t, "-C", root, "commit", "-m", "add tracked file")
 	if err := os.WriteFile(filepath.Join(root, ".virga.yaml"), []byte(`files:
   - source: tracked.env
-    mode: copy
+	mode: copy
 `), 0o644); err != nil {
 		t.Fatalf("write repository config: %v", err)
 	}
@@ -231,9 +237,9 @@ func TestNewWorktreeCommandCreatesTmuxSessionFromRepositoryConfig(t *testing.T) 
 	root := newCLITestRepository(t)
 	if err := os.WriteFile(filepath.Join(root, ".virga.yaml"), []byte(`tmux:
   windows:
-    - name: editor
-      panes:
-        - command: nvim
+	- name: editor
+	  panes:
+		- command: nvim
 `), 0o644); err != nil {
 		t.Fatalf("write repository config: %v", err)
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/AndyHolt/virga/internal/config"
 	"github.com/AndyHolt/virga/internal/files"
 	"github.com/AndyHolt/virga/internal/git"
+	"github.com/AndyHolt/virga/internal/setup"
 	"github.com/AndyHolt/virga/internal/tmux"
 )
 
@@ -87,6 +88,33 @@ func TestOpenCommandReusesExistingTmuxSession(t *testing.T) {
 		"Tmux action: reused\n"
 	if got := output.String(); got != want {
 		t.Fatalf("output = %q, want %q", got, want)
+	}
+}
+
+func TestOpenCommandDoesNotRunSetupForReusedWorktree(t *testing.T) {
+	command := newOpenCmd(
+		func() (string, error) { return "/repo", nil },
+		openWorktreeOptions{
+			listBranches:  func(context.Context, string) ([]string, error) { return []string{"feature"}, nil },
+			listWorktrees: openTestWorktrees,
+			inspect: func(context.Context, string) (git.WorktreeInfo, error) {
+				t.Fatal("inspect called for a reused worktree without tmux")
+				return git.WorktreeInfo{}, nil
+			},
+			loadConfiguration: func(context.Context, string, string) (config.Config, error) {
+				t.Fatal("loadConfiguration called for a reused worktree without tmux")
+				return config.Config{}, nil
+			},
+			runSetup: func(context.Context, setup.Options) error {
+				t.Fatal("runSetup called for a reused worktree")
+				return nil
+			},
+		},
+	)
+	command.SetArgs([]string{"feature", "--no-tmux"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
 	}
 }
 
@@ -249,6 +277,7 @@ func TestOpenCommandCreatesMissingWorktree(t *testing.T) {
 	var calls []string
 	configuration := config.Config{
 		Files: []files.Entry{{Source: ".env", Mode: files.ModeCopy}},
+		Setup: config.SetupConfig{Commands: []string{"uv sync"}},
 		Tmux:  config.TmuxConfig{Windows: []config.TmuxWindow{{Name: "shell"}}},
 	}
 	command := newOpenCmd(
@@ -295,6 +324,13 @@ func TestOpenCommandCreatesMissingWorktree(t *testing.T) {
 				}
 				return nil
 			},
+			runSetup: func(_ context.Context, options setup.Options) error {
+				calls = append(calls, "setup")
+				if options.WorktreeRoot != "/repo_feature" || !reflect.DeepEqual(options.Commands, configuration.Setup.Commands) {
+					t.Errorf("setup options = %#v, want worktree and commands", options)
+				}
+				return nil
+			},
 			ensureSession: func(_ context.Context, options tmux.CreateSessionOptions) (tmux.EnsureSessionResult, error) {
 				calls = append(calls, "ensure")
 				if options.RepositoryRoot != "/repo" || options.Branch != "feature" || options.WorktreeRoot != "/repo_feature" {
@@ -322,7 +358,7 @@ func TestOpenCommandCreatesMissingWorktree(t *testing.T) {
 	if got := output.String(); got != wantOutput {
 		t.Fatalf("output = %q, want %q", got, wantOutput)
 	}
-	if wantCalls := []string{"load", "inspect", "add", "materialise", "ensure"}; !reflect.DeepEqual(calls, wantCalls) {
+	if wantCalls := []string{"load", "inspect", "add", "materialise", "setup", "ensure"}; !reflect.DeepEqual(calls, wantCalls) {
 		t.Fatalf("calls = %q, want %q", calls, wantCalls)
 	}
 }
@@ -400,6 +436,38 @@ func TestOpenCommandReportsCreatedWorktreeMaterialisationFailure(t *testing.T) {
 	}
 	if ensureCalled {
 		t.Fatal("ensureSession called after materialisation failure")
+	}
+}
+
+func TestOpenCommandReportsCreatedWorktreeSetupFailure(t *testing.T) {
+	setupErr := errors.New("uv sync failed")
+	command := newOpenCmd(
+		func() (string, error) { return "/repo", nil },
+		openWorktreeOptions{
+			listBranches:  func(context.Context, string) ([]string, error) { return []string{"feature"}, nil },
+			listWorktrees: func(context.Context, string) ([]git.ListedWorktree, error) { return nil, nil },
+			loadConfiguration: func(context.Context, string, string) (config.Config, error) {
+				return config.Config{Setup: config.SetupConfig{Commands: []string{"uv sync"}}}, nil
+			},
+			inspect: func(context.Context, string) (git.WorktreeInfo, error) {
+				return git.WorktreeInfo{Kind: git.MainWorktree, MainWorktreeRoot: "/repo"}, nil
+			},
+			addWorktree: func(context.Context, string, string) (string, error) { return "/repo_feature", nil },
+			runSetup:    func(context.Context, setup.Options) error { return setupErr },
+			ensureSession: func(context.Context, tmux.CreateSessionOptions) (tmux.EnsureSessionResult, error) {
+				t.Fatal("ensureSession called after setup failure")
+				return tmux.EnsureSessionResult{}, nil
+			},
+		},
+	)
+	command.SetArgs([]string{"feature"})
+
+	err := command.Execute()
+	if !errors.Is(err, setupErr) {
+		t.Fatalf("Execute() error = %v, want wrapped %v", err, setupErr)
+	}
+	if !strings.Contains(err.Error(), "created worktree for branch \"feature\" at \"/repo_feature\", but run setup commands") {
+		t.Fatalf("Execute() error = %v, want created-worktree context", err)
 	}
 }
 
@@ -615,12 +683,12 @@ func TestOpenCommandCreatesGitWorktreeForExistingBranch(t *testing.T) {
 	}
 	if err := os.WriteFile(filepath.Join(root, ".virga.yaml"), []byte(`files:
   - source: .env
-    mode: copy
+	mode: copy
 tmux:
   windows:
-    - name: shell
-      panes:
-        - command: make test
+	- name: shell
+	  panes:
+		- command: make test
 `), 0o644); err != nil {
 		t.Fatalf("write repository config: %v", err)
 	}
@@ -693,7 +761,7 @@ func TestOpenCommandRetainsCreatedGitWorktreeAfterFileMaterialisationFailure(t *
 	cliRunGit(t, "-C", root, "branch", "feature")
 	if err := os.WriteFile(filepath.Join(root, ".virga.yaml"), []byte(`files:
   - source: tracked.env
-    mode: copy
+	mode: copy
 `), 0o644); err != nil {
 		t.Fatalf("write repository config: %v", err)
 	}

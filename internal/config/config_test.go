@@ -110,6 +110,8 @@ func TestLoaderRejectsConfigurationErrors(t *testing.T) {
 		{name: "missing file source", content: "files:\n  - mode: copy\n", want: "source is required"},
 		{name: "invalid file mode", content: "files:\n  - source: .env\n    mode: move\n", want: "mode must be"},
 		{name: "unknown file field", content: "files:\n  - source: .env\n    mode: copy\n    destination: .env\n", want: "field destination not found"},
+		{name: "empty setup command", content: "setup:\n  commands:\n    - '  '\n", want: "setup.commands[0]: command is required"},
+		{name: "unknown setup field", content: "setup:\n  command: uv sync\n", want: "field command not found"},
 	}
 
 	for _, test := range tests {
@@ -141,6 +143,23 @@ func TestLoaderLoadsFilesConfiguration(t *testing.T) {
 	}
 	if !reflect.DeepEqual(configuration.Files, want) {
 		t.Errorf("files = %#v, want %#v", configuration.Files, want)
+	}
+}
+
+func TestLoaderLoadsSetupConfiguration(t *testing.T) {
+	root := t.TempDir()
+	userHome := t.TempDir()
+	writeTestConfig(t, filepath.Join(userHome, ".config", "virga", "config.yaml"), "setup:\n  commands:\n    - make user-setup\n")
+	writeTestConfig(t, filepath.Join(root, ".virga.yaml"), "setup:\n  commands:\n    - uv sync\n    - make install-dependencies\n")
+	loader := testLoader(root, userHome, nil, "linux")
+
+	configuration, err := loader.Load(context.Background(), root, "")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	want := []string{"uv sync", "make install-dependencies"}
+	if !reflect.DeepEqual(configuration.Setup.Commands, want) {
+		t.Errorf("setup commands = %#v, want %#v", configuration.Setup.Commands, want)
 	}
 }
 

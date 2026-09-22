@@ -8,6 +8,7 @@ import (
 	"github.com/AndyHolt/virga/internal/config"
 	"github.com/AndyHolt/virga/internal/files"
 	"github.com/AndyHolt/virga/internal/git"
+	"github.com/AndyHolt/virga/internal/setup"
 	"github.com/AndyHolt/virga/internal/tmux"
 	"github.com/spf13/cobra"
 )
@@ -17,6 +18,7 @@ type configurationLoader func(context.Context, string, string) (config.Config, e
 type localBranchLister func(context.Context, string) ([]string, error)
 type terminalDetector func() bool
 type fileMaterialiser func(context.Context, files.Options) error
+type setupRunner func(context.Context, setup.Options) error
 type tmuxSessionCreator func(context.Context, tmux.CreateSessionOptions) (string, error)
 type tmuxSessionAttacher func(context.Context, string) error
 
@@ -27,6 +29,7 @@ type newWorktreeOptions struct {
 	selectBranch      branchSelector
 	loadConfiguration configurationLoader
 	materialiseFiles  fileMaterialiser
+	runSetup          setupRunner
 	createSession     tmuxSessionCreator
 	attachSession     tmuxSessionAttacher
 }
@@ -67,7 +70,8 @@ func newWorktreeCmd(getwd func() (string, error), create worktreeCreator, option
 
 			setupTmux := !noTmux && options.createSession != nil
 			materialiseFiles := options.materialiseFiles != nil
-			needsConfiguration := setupTmux || materialiseFiles
+			runSetup := options.runSetup != nil
+			needsConfiguration := setupTmux || materialiseFiles || runSetup
 			var configuration config.Config
 			var repositoryRoot string
 			if needsConfiguration {
@@ -124,6 +128,16 @@ func newWorktreeCmd(getwd func() (string, error), create worktreeCreator, option
 					Entries:        configuration.Files,
 				}); err != nil {
 					return fmt.Errorf("created branch %q and worktree %q, but materialise files: %w", args[0], worktree, err)
+				}
+			}
+			if runSetup && len(configuration.Setup.Commands) > 0 {
+				if err := options.runSetup(cmd.Context(), setup.Options{
+					WorktreeRoot: worktree,
+					Commands:     configuration.Setup.Commands,
+					Stdout:       cmd.ErrOrStderr(),
+					Stderr:       cmd.ErrOrStderr(),
+				}); err != nil {
+					return fmt.Errorf("created branch %q and worktree %q, but run setup commands: %w", args[0], worktree, err)
 				}
 			}
 
