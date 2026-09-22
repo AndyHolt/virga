@@ -198,7 +198,7 @@ Extend .virga.yaml with entries such as:
       mode: copy
 ```
 
-### Commit 1: File materialization engine
+### Commit 1: File materialisation engine
 
 - Support files relative to the primary repository.
 - Support copy and symlink.
@@ -206,7 +206,7 @@ Extend .virga.yaml with entries such as:
 - Reject path traversal and destinations outside the worktree.
 - Reject existing destinations by default.
 - Preflight all entries before making changes.
-- Test spaces, Unicode, missing sources, collisions, and symlink behavior.
+- Test spaces, Unicode, missing sources, collisions, and symlink behaviour.
 
 ### Commit 2: Integrate into creation lifecycle
 
@@ -223,7 +223,7 @@ On provisioning failure, retain the worktree and report partial state conservati
 
 ### Commit 3: Documentation and end-to-end coverage
 
-Document the configuration schema, lifecycle, collision behavior, and security implications.
+Document the configuration schema, lifecycle, collision behaviour, and security implications.
 
 ────────────────────────────────────────────────────────────────────────────────
 

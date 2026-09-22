@@ -4,7 +4,7 @@
 
 Add a Virga workflow for an existing local branch: if the branch is already checked out in a Git worktree, Virga should take the user to that worktree's tmux environment; if the branch exists but has no worktree, Virga should create the worktree and tmux environment without creating a new branch.
 
-The plan also adds inventory/switching primitives first, because the requested behavior depends on reliably discovering current worktrees and Virga-managed tmux sessions.
+The plan also adds inventory/switching primitives first, because the requested behaviour depends on reliably discovering current worktrees and Virga-managed tmux sessions.
 
 ## Scope
 
@@ -17,9 +17,9 @@ The plan also adds inventory/switching primitives first, because the requested b
   - Create a sibling worktree with `git worktree add <destination> refs/heads/<branch>` when the branch exists but is not checked out.
   - Ensure the deterministic Virga tmux session exists for that branch/worktree.
   - Attach or switch to the session when interactive, respecting `--no-attach` and `--no-tmux`-style escape hatches.
-  - Materialize configured files only when Virga creates a new worktree, not when it reuses an existing one.
+  - Materialise configured files only when Virga creates a new worktree, not when it reuses an existing one.
 - Improve `virga new <branch>` errors for existing branches so users are directed to `virga open <branch>` when appropriate.
-- Add tests and README/help documentation for the new behavior.
+- Add tests and README/help documentation for the new behaviour.
 
 ### Out of scope
 
@@ -27,18 +27,18 @@ The plan also adds inventory/switching primitives first, because the requested b
 - Moving or deleting existing worktrees.
 - Force-opening locked/prunable worktrees, or running `git worktree prune` automatically.
 - Associating arbitrary tmux sessions with worktrees. Initial tmux discovery should use Virga's deterministic `tmux.SessionName(repositoryRoot, branch)` convention.
-- Prompting from `virga new` by default. The safer first behavior is an actionable message/suggestion; an interactive prompt can be added later if desired.
+- Prompting from `virga new` by default. The safer first behaviour is an actionable message/suggestion; an interactive prompt can be added later if desired.
 
 ## Current state
 
 Verified in this worktree:
 
 - The repository currently has `info` and `new` commands. `go run ./main.go --help` lists only those application commands plus Cobra's generated help/completion commands.
-- `virga new <branch>` creates a new local branch and sibling worktree, then optionally materializes files and creates/attaches tmux.
+- `virga new <branch>` creates a new local branch and sibling worktree, then optionally materialises files and creates/attaches tmux.
 - `internal/git.CreateWorktree` always uses `git worktree add -b <new-branch> ...` and intentionally rejects any existing local branch via `LocalBranchExistsError`.
 - Worktree inspection exists for the current directory (`internal/git.InspectWorktree`), but there is no API to list all worktrees and no command to switch/open a different one.
 - tmux session names are deterministic (`internal/tmux.SessionName`), and sessions can be created/attached, but there is no API to check whether a session already exists or to switch clients when already inside tmux.
-- Configuration and file materialization already exist and are wired into `new`.
+- Configuration and file materialisation already exist and are wired into `new`.
 - `go test ./...` passed before planning.
 
 ## Proposed UX and decisions
@@ -55,22 +55,22 @@ virga open feature/login --no-tmux
 
 Rationale:
 
-- Keep `virga new <branch>` strict: it creates a new branch and remains compatible with current behavior.
-- Use `virga open <branch>` for idempotent "open this existing branch environment" behavior. This avoids surprising prompts in scripts and directly covers the case where the branch already has a worktree.
+- Keep `virga new <branch>` strict: it creates a new branch and remains compatible with current behaviour.
+- Use `virga open <branch>` for idempotent "open this existing branch environment" behaviour. This avoids surprising prompts in scripts and directly covers the case where the branch already has a worktree.
 - Use `virga list` first so users can discover worktrees and sessions before opening them.
 
-### `virga open <branch>` behavior
+### `virga open <branch>` behaviour
 
 1. Discover the current repository's primary worktree root from any nested directory or linked worktree.
 2. Validate that `<branch>` is a local branch (`refs/heads/<branch>`), using fully-qualified refs to avoid tag/revision ambiguity.
 3. List existing worktrees with `git worktree list --porcelain -z`.
 4. If a usable worktree already has `branch refs/heads/<branch>`:
    - Reuse that path.
-   - Do not materialize configured files by default, because the worktree may contain user changes or intentional local files.
+   - Do not materialise configured files by default, because the worktree may contain user changes or intentional local files.
 5. If the branch exists but is not checked out in a worktree:
    - Preflight the sibling destination using the existing naming convention (`<repo>_<branch-with-slashes-replaced>`).
    - Run `git worktree add <destination> refs/heads/<branch>` without `-b`.
-   - Materialize configured files before tmux, matching the current `new` lifecycle.
+   - Materialise configured files before tmux, matching the current `new` lifecycle.
 6. Ensure tmux unless disabled:
    - Compute the deterministic session name from primary repository root and branch.
    - If the session exists, reuse it.
@@ -98,7 +98,7 @@ When `virga new <branch>` receives a branch that already exists, improve the err
 local branch "feature/login" already exists and is checked out at /projects/virga_feature-login; run "virga open feature/login" to use it
 ```
 
-This "offers to switch" without changing `new` into an interactive command. If the maintainer wants an actual prompt later, add it behind explicit interactive-terminal checks and preserve non-interactive script behavior.
+This "offers to switch" without changing `new` into an interactive command. If the maintainer wants an actual prompt later, add it behind explicit interactive-terminal checks and preserve non-interactive script behaviour.
 
 ## Delivery plan
 
@@ -123,7 +123,7 @@ This "offers to switch" without changing `new` into an interactive command. If t
 - Implementation:
   - Add tmux support for checking session existence, e.g. `HasSession(ctx, name)` using `tmux has-session -t <name>`.
   - Add an activation method that attaches outside tmux and switches clients inside tmux. Keep environment lookup injectable so tests can simulate `$TMUX`.
-  - Keep `CreateSession` behavior unchanged for now; do not silently ignore existing-session errors in this commit.
+  - Keep `CreateSession` behaviour unchanged for now; do not silently ignore existing-session errors in this commit.
 - Tests:
   - Existing session, missing session, missing tmux, and command failure cases.
   - Activation chooses `attach-session` when `$TMUX` is unset and `switch-client` when `$TMUX` is set.
@@ -139,7 +139,7 @@ This "offers to switch" without changing `new` into an interactive command. If t
   - Listing should not require tmux to be installed; report tmux status as unavailable/unknown rather than failing the entire command.
 - Tests:
   - CLI tests for human and JSON output.
-  - Non-Git repository error behavior.
+  - Non-Git repository error behaviour.
   - tmux installed/running/missing/unavailable states.
 - Documentation:
   - README section for listing worktrees and session status.
@@ -154,7 +154,7 @@ This "offers to switch" without changing `new` into an interactive command. If t
 
 **Outcome:** Users can switch to a branch that is already checked out in a worktree and land in its existing or newly-created tmux session.
 
-#### Commit 1: Add session ensure/reuse behavior
+#### Commit 1: Add session ensure/reuse behaviour
 
 - Implementation:
   - Add an `EnsureSession(ctx, options)` operation in `internal/tmux` or a small command-level helper that checks `HasSession` before `CreateSession`.
@@ -168,7 +168,7 @@ This "offers to switch" without changing `new` into an interactive command. If t
 #### Commit 2: Add `virga open <branch>` for checked-out branches
 
 - Implementation:
-  - Add a new Cobra command with flags `--config`, `--no-tmux`, and `--no-attach` mirroring relevant `new` behavior.
+  - Add a new Cobra command with flags `--config`, `--no-tmux`, and `--no-attach` mirroring relevant `new` behaviour.
   - In this first slice, require the branch to already be present in the worktree list; if it is not checked out, return a clear "no worktree for branch" error and mention that creating one comes next.
   - Reuse existing configuration loading for tmux layout.
   - Ensure/reuse tmux session and activate it when interactive.
@@ -210,21 +210,21 @@ This "offers to switch" without changing `new` into an interactive command. If t
 - Implementation:
   - If `ListWorktrees` finds no usable worktree for the branch, call the new existing-branch worktree creation operation.
   - Load configuration before provisioning, as `new` does.
-  - Materialize configured files only for newly-created worktrees, before tmux session creation.
-  - If file materialization or tmux creation fails after worktree creation, retain the worktree and report what was created. Do not delete existing branches or worktrees.
+  - Materialise configured files only for newly-created worktrees, before tmux session creation.
+  - If file materialisation or tmux creation fails after worktree creation, retain the worktree and report what was created. Do not delete existing branches or worktrees.
   - Output `Worktree action: created` when a worktree is created.
 - Tests:
-  - Existing branch with no worktree creates worktree, materializes files, creates/reuses tmux, and attaches/switches only when appropriate.
-  - File materialization collision after worktree creation retains the worktree and reports partial state.
+  - Existing branch with no worktree creates worktree, materialises files, creates/reuses tmux, and attaches/switches only when appropriate.
+  - File materialisation collision after worktree creation retains the worktree and reports partial state.
   - Tmux failure after worktree creation retains the worktree and reports partial state.
-  - Existing worktree path does not trigger file materialization.
+  - Existing worktree path does not trigger file materialisation.
 - Documentation:
   - Update README examples for `virga open <branch>` creating or reusing worktrees.
 
 **Acceptance criteria:**
 
 - Existing local branches can be opened without creating a new branch.
-- Operation ordering is deterministic: discover, create/reuse worktree, materialize files only if newly created, ensure tmux, activate.
+- Operation ordering is deterministic: discover, create/reuse worktree, materialise files only if newly created, ensure tmux, activate.
 - Partial failures preserve user data and clearly report retained resources.
 
 ### PR 4: Improve `virga new` existing-branch guidance
@@ -236,11 +236,11 @@ This "offers to switch" without changing `new` into an interactive command. If t
 - Implementation:
   - Extend the existing `LocalBranchExistsError` handling path or add a new typed error that can include the checked-out worktree path when known.
   - When `CreateWorktree` detects an existing branch, consult `ListWorktrees` to determine whether that branch is already checked out in this repository.
-  - Keep the current strict behavior: `new` does not switch, attach, or create a worktree for an existing branch.
+  - Keep the current strict behaviour: `new` does not switch, attach, or create a worktree for an existing branch.
 - Tests:
   - Existing branch checked out in a worktree reports the worktree path and suggests `virga open <branch>`.
   - Existing branch not checked out still reports that the local branch exists and suggests `virga open <branch>` to create/reuse an existing-branch environment.
-  - Usage/error behavior remains consistent with existing Cobra tests.
+  - Usage/error behaviour remains consistent with existing Cobra tests.
 - Documentation:
   - README note: use `new` for new branches and `open` for existing branches.
 
@@ -273,15 +273,15 @@ Also run `make tidy` whenever dependencies change. For CLI/workflow changes, add
 - **Prompting can break scripts:** keep `new` non-interactive initially; use `open` for explicit switching/opening.
 - **tmux attach inside tmux can nest or fail:** add an activation primitive that uses `switch-client` when `$TMUX` is set.
 - **Stale/prunable worktrees may point at missing directories:** list them, but do not automatically prune or reuse them for `open`; return an actionable error.
-- **Configured file materialization can overwrite user files:** materialize only when Virga creates a worktree, retain existing no-overwrite preflights, and do nothing when reusing a worktree.
+- **Configured file materialisation can overwrite user files:** materialise only when Virga creates a worktree, retain existing no-overwrite preflights, and do nothing when reusing a worktree.
 - **Session name collisions or manual sessions:** reuse only the deterministic Virga session name. Document that Virga treats that name as its session for the branch.
 
 ## Assumptions and open questions
 
-- Proposed command name is `open`. `add` would also fit existing-branch worktree creation, but `open` better describes the idempotent create-or-reuse-and-switch behavior.
+- Proposed command name is `open`. `add` would also fit existing-branch worktree creation, but `open` better describes the idempotent create-or-reuse-and-switch behaviour.
 - `virga list` should list Git worktrees for the current repository only, not all tmux sessions on the machine.
-- Initial support is local branches only. Remote branch materialization can be a separate plan.
-- Maintainer decision needed before adding an actual interactive prompt or `--open-existing` convenience behavior to `virga new`.
+- Initial support is local branches only. Remote branch materialisation can be a separate plan.
+- Maintainer decision needed before adding an actual interactive prompt or `--open-existing` convenience behaviour to `virga new`.
 
 ## Definition of done
 

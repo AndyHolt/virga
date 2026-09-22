@@ -45,8 +45,8 @@ virga open feature/login --no-tmux
 virga open feature/login --no-attach
 ```
 
-Configured files are materialized only when `virga open` creates a new worktree.
-Existing worktrees are never modified by file materialization.
+Configured files are materialised only when `virga open` creates a new worktree.
+Existing worktrees are never modified by file materialisation.
 
 ## Create a worktree
 
@@ -82,7 +82,7 @@ branches that already exist.
 
 ### Configured files
 
-Virga can materialize repository-local paths into each new worktree before tmux
+Virga can materialise repository-local paths into each new worktree before tmux
 starts. This is intended for untracked local environment files and shared,
 Git-ignored data caches that startup commands need:
 

@@ -107,7 +107,7 @@ func parseWorktreeList(output []byte) ([]ListedWorktree, error) {
 			current.Prunable = true
 			current.PruneReason = strings.TrimPrefix(field, "prunable ")
 		default:
-			return nil, fmt.Errorf("parse Git worktree list: unrecognized field %q", field)
+			return nil, fmt.Errorf("parse Git worktree list: unrecognised field %q", field)
 		}
 	}
 	finishCurrent()

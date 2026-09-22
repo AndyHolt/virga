@@ -63,8 +63,8 @@ func TestOpenCommandReusesExistingTmuxSession(t *testing.T) {
 				}
 				return tmux.EnsureSessionResult{Name: "repo_feature-login", Action: tmux.SessionReused}, nil
 			},
-			materializeFiles: func(context.Context, files.Options) error {
-				t.Fatal("materializeFiles called for reused worktree")
+			materialiseFiles: func(context.Context, files.Options) error {
+				t.Fatal("materialiseFiles called for reused worktree")
 				return nil
 			},
 			isInteractive: func() bool { return false },
@@ -137,8 +137,8 @@ func TestOpenCommandNoTmuxSkipsTmuxSetup(t *testing.T) {
 				t.Fatal("ensureSession called with --no-tmux")
 				return tmux.EnsureSessionResult{}, nil
 			},
-			materializeFiles: func(context.Context, files.Options) error {
-				t.Fatal("materializeFiles called for reused worktree")
+			materialiseFiles: func(context.Context, files.Options) error {
+				t.Fatal("materialiseFiles called for reused worktree")
 				return nil
 			},
 			attachSession: func(context.Context, string) error {
@@ -287,11 +287,11 @@ func TestOpenCommandCreatesMissingWorktree(t *testing.T) {
 				}
 				return "/repo_feature", nil
 			},
-			materializeFiles: func(_ context.Context, options files.Options) error {
-				calls = append(calls, "materialize")
+			materialiseFiles: func(_ context.Context, options files.Options) error {
+				calls = append(calls, "materialise")
 				want := files.Options{RepositoryRoot: "/repo", WorktreeRoot: "/repo_feature", Entries: configuration.Files}
 				if !reflect.DeepEqual(options, want) {
-					t.Errorf("materialize options = %#v, want %#v", options, want)
+					t.Errorf("materialise options = %#v, want %#v", options, want)
 				}
 				return nil
 			},
@@ -322,14 +322,14 @@ func TestOpenCommandCreatesMissingWorktree(t *testing.T) {
 	if got := output.String(); got != wantOutput {
 		t.Fatalf("output = %q, want %q", got, wantOutput)
 	}
-	if wantCalls := []string{"load", "inspect", "add", "materialize", "ensure"}; !reflect.DeepEqual(calls, wantCalls) {
+	if wantCalls := []string{"load", "inspect", "add", "materialise", "ensure"}; !reflect.DeepEqual(calls, wantCalls) {
 		t.Fatalf("calls = %q, want %q", calls, wantCalls)
 	}
 }
 
-func TestOpenCommandMaterializesFilesWithoutTmuxForCreatedWorktree(t *testing.T) {
+func TestOpenCommandMaterialisesFilesWithoutTmuxForCreatedWorktree(t *testing.T) {
 	var output bytes.Buffer
-	materialized := false
+	materialised := false
 	command := newOpenCmd(
 		func() (string, error) { return "/repo", nil },
 		openWorktreeOptions{
@@ -342,8 +342,8 @@ func TestOpenCommandMaterializesFilesWithoutTmuxForCreatedWorktree(t *testing.T)
 				return git.WorktreeInfo{Kind: git.MainWorktree, MainWorktreeRoot: "/repo"}, nil
 			},
 			addWorktree: func(context.Context, string, string) (string, error) { return "/repo_feature", nil },
-			materializeFiles: func(context.Context, files.Options) error {
-				materialized = true
+			materialiseFiles: func(context.Context, files.Options) error {
+				materialised = true
 				return nil
 			},
 			ensureSession: func(context.Context, tmux.CreateSessionOptions) (tmux.EnsureSessionResult, error) {
@@ -358,8 +358,8 @@ func TestOpenCommandMaterializesFilesWithoutTmuxForCreatedWorktree(t *testing.T)
 	if err := command.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if !materialized {
-		t.Fatal("materializeFiles was not called")
+	if !materialised {
+		t.Fatal("materialiseFiles was not called")
 	}
 	want := "Branch: feature\nWorktree: /repo_feature\nWorktree action: created\n"
 	if got := output.String(); got != want {
@@ -367,8 +367,8 @@ func TestOpenCommandMaterializesFilesWithoutTmuxForCreatedWorktree(t *testing.T)
 	}
 }
 
-func TestOpenCommandReportsCreatedWorktreeMaterializationFailure(t *testing.T) {
-	materializeErr := errors.New("copy failed")
+func TestOpenCommandReportsCreatedWorktreeMaterialisationFailure(t *testing.T) {
+	materialiseErr := errors.New("copy failed")
 	ensureCalled := false
 	command := newOpenCmd(
 		func() (string, error) { return "/repo", nil },
@@ -382,7 +382,7 @@ func TestOpenCommandReportsCreatedWorktreeMaterializationFailure(t *testing.T) {
 				return git.WorktreeInfo{Kind: git.MainWorktree, MainWorktreeRoot: "/repo"}, nil
 			},
 			addWorktree:      func(context.Context, string, string) (string, error) { return "/repo_feature", nil },
-			materializeFiles: func(context.Context, files.Options) error { return materializeErr },
+			materialiseFiles: func(context.Context, files.Options) error { return materialiseErr },
 			ensureSession: func(context.Context, tmux.CreateSessionOptions) (tmux.EnsureSessionResult, error) {
 				ensureCalled = true
 				return tmux.EnsureSessionResult{}, nil
@@ -392,14 +392,14 @@ func TestOpenCommandReportsCreatedWorktreeMaterializationFailure(t *testing.T) {
 	command.SetArgs([]string{"feature"})
 
 	err := command.Execute()
-	if !errors.Is(err, materializeErr) {
-		t.Fatalf("Execute() error = %v, want wrapped materialize error", err)
+	if !errors.Is(err, materialiseErr) {
+		t.Fatalf("Execute() error = %v, want wrapped materialise error", err)
 	}
-	if !strings.Contains(err.Error(), "created worktree for branch \"feature\" at \"/repo_feature\", but materialize files") {
+	if !strings.Contains(err.Error(), "created worktree for branch \"feature\" at \"/repo_feature\", but materialise files") {
 		t.Fatalf("Execute() error = %v, want created-worktree context", err)
 	}
 	if ensureCalled {
-		t.Fatal("ensureSession called after materialization failure")
+		t.Fatal("ensureSession called after materialisation failure")
 	}
 }
 
@@ -642,7 +642,7 @@ tmux:
 			listWorktrees:     git.ListWorktrees,
 			addWorktree:       git.AddExistingBranchWorktree,
 			loadConfiguration: configurationLoader.Load,
-			materializeFiles:  files.Materialize,
+			materialiseFiles:  files.Materialise,
 			ensureSession: func(_ context.Context, options tmux.CreateSessionOptions) (tmux.EnsureSessionResult, error) {
 				sessionOptions = options
 				assertFileContents(t, filepath.Join(options.WorktreeRoot, ".env"), "TOKEN=value\n")
@@ -683,7 +683,7 @@ tmux:
 	}
 }
 
-func TestOpenCommandRetainsCreatedGitWorktreeAfterFileMaterializationFailure(t *testing.T) {
+func TestOpenCommandRetainsCreatedGitWorktreeAfterFileMaterialisationFailure(t *testing.T) {
 	root := newCLITestRepository(t)
 	if err := os.WriteFile(filepath.Join(root, "tracked.env"), []byte("tracked\n"), 0o600); err != nil {
 		t.Fatalf("write tracked file: %v", err)
@@ -710,7 +710,7 @@ func TestOpenCommandRetainsCreatedGitWorktreeAfterFileMaterializationFailure(t *
 			listWorktrees:     git.ListWorktrees,
 			addWorktree:       git.AddExistingBranchWorktree,
 			loadConfiguration: configurationLoader.Load,
-			materializeFiles:  files.Materialize,
+			materialiseFiles:  files.Materialise,
 			ensureSession: func(context.Context, tmux.CreateSessionOptions) (tmux.EnsureSessionResult, error) {
 				t.Fatal("tmux session ensured after configured file collision")
 				return tmux.EnsureSessionResult{}, nil
@@ -753,7 +753,7 @@ func TestOpenCommandRetainsCreatedGitWorktreeAfterTmuxFailure(t *testing.T) {
 			listWorktrees:     git.ListWorktrees,
 			addWorktree:       git.AddExistingBranchWorktree,
 			loadConfiguration: configurationLoader.Load,
-			materializeFiles:  files.Materialize,
+			materialiseFiles:  files.Materialise,
 			ensureSession: func(context.Context, tmux.CreateSessionOptions) (tmux.EnsureSessionResult, error) {
 				return tmux.EnsureSessionResult{}, ensureErr
 			},

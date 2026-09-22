@@ -16,7 +16,7 @@ type worktreeCreator func(context.Context, string, string, string) (string, erro
 type configurationLoader func(context.Context, string, string) (config.Config, error)
 type localBranchLister func(context.Context, string) ([]string, error)
 type terminalDetector func() bool
-type fileMaterializer func(context.Context, files.Options) error
+type fileMaterialiser func(context.Context, files.Options) error
 type tmuxSessionCreator func(context.Context, tmux.CreateSessionOptions) (string, error)
 type tmuxSessionAttacher func(context.Context, string) error
 
@@ -26,7 +26,7 @@ type newWorktreeOptions struct {
 	isInteractive     terminalDetector
 	selectBranch      branchSelector
 	loadConfiguration configurationLoader
-	materializeFiles  fileMaterializer
+	materialiseFiles  fileMaterialiser
 	createSession     tmuxSessionCreator
 	attachSession     tmuxSessionAttacher
 }
@@ -66,8 +66,8 @@ func newWorktreeCmd(getwd func() (string, error), create worktreeCreator, option
 			}
 
 			setupTmux := !noTmux && options.createSession != nil
-			materializeFiles := options.materializeFiles != nil
-			needsConfiguration := setupTmux || materializeFiles
+			materialiseFiles := options.materialiseFiles != nil
+			needsConfiguration := setupTmux || materialiseFiles
 			var configuration config.Config
 			var repositoryRoot string
 			if needsConfiguration {
@@ -117,13 +117,13 @@ func newWorktreeCmd(getwd func() (string, error), create worktreeCreator, option
 			}
 
 			output := fmt.Sprintf("Branch: %s\nWorktree: %s\n", args[0], worktree)
-			if materializeFiles && len(configuration.Files) > 0 {
-				if err := options.materializeFiles(cmd.Context(), files.Options{
+			if materialiseFiles && len(configuration.Files) > 0 {
+				if err := options.materialiseFiles(cmd.Context(), files.Options{
 					RepositoryRoot: repositoryRoot,
 					WorktreeRoot:   worktree,
 					Entries:        configuration.Files,
 				}); err != nil {
-					return fmt.Errorf("created branch %q and worktree %q, but materialize files: %w", args[0], worktree, err)
+					return fmt.Errorf("created branch %q and worktree %q, but materialise files: %w", args[0], worktree, err)
 				}
 			}
 

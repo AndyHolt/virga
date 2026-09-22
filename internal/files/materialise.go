@@ -1,4 +1,4 @@
-// Package files materializes repository-managed paths into Virga worktrees.
+// Package files materialises repository-managed paths into Virga worktrees.
 package files
 
 import (
@@ -21,7 +21,7 @@ const (
 	ModeSymlink Mode = "symlink"
 )
 
-// Entry describes one repository path to materialize into a worktree. Source is
+// Entry describes one repository path to materialise into a worktree. Source is
 // relative to the primary repository root and is also used as the worktree
 // destination path. Copy entries require a regular-file source; symlink entries
 // also allow directory sources.
@@ -30,7 +30,7 @@ type Entry struct {
 	Mode   Mode
 }
 
-// Options describes a path materialization operation.
+// Options describes a path materialisation operation.
 type Options struct {
 	RepositoryRoot string
 	WorktreeRoot   string
@@ -46,9 +46,9 @@ type plannedEntry struct {
 	permission  os.FileMode
 }
 
-// Materialize copies or links configured paths from the primary repository into
+// Materialise copies or links configured paths from the primary repository into
 // a worktree. All entries are validated before any filesystem changes are made.
-func Materialize(ctx context.Context, options Options) error {
+func Materialise(ctx context.Context, options Options) error {
 	planned, err := preflight(options)
 	if err != nil {
 		return err
@@ -73,7 +73,7 @@ func Materialize(ctx context.Context, options Options) error {
 				return fmt.Errorf("symlink files[%d] %q: %w", entry.index, entry.relative, err)
 			}
 		default:
-			panic("preflight accepted unsupported file materialization mode")
+			panic("preflight accepted unsupported file materialisation mode")
 		}
 	}
 	return nil
