@@ -1,5 +1,11 @@
 package config
 
+// SetupConfig describes commands run after a worktree is created and before a
+// tmux session is started.
+type SetupConfig struct {
+	Commands []string
+}
+
 // TmuxConfig describes tmux windows created for a worktree.
 type TmuxConfig struct {
 	Windows []TmuxWindow
@@ -20,6 +26,11 @@ type TmuxPane struct {
 type rawConfig struct {
 	Tmux  *rawTmuxConfig   `yaml:"tmux"`
 	Files *[]rawFileConfig `yaml:"files"`
+	Setup *rawSetupConfig  `yaml:"setup"`
+}
+
+type rawSetupConfig struct {
+	Commands []string `yaml:"commands"`
 }
 
 type rawTmuxConfig struct {

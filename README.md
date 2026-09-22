@@ -109,12 +109,34 @@ default and preflights all configured entries before copying or linking any of
 them. If provisioning fails after Git creates the branch and worktree, Virga
 keeps those resources and reports what was created rather than deleting them.
 
+### Setup commands
+
+Run project setup commands in every newly created worktree before tmux starts:
+
+```yaml
+setup:
+  commands:
+    - uv sync
+    - make install-dependencies
+```
+
+Commands run sequentially with the new worktree as their working directory.
+They are interpreted by the platform shell (`sh -c` on Unix-like systems and
+`cmd.exe /C` on Windows), so shell syntax is supported. Command output is sent
+to stderr, preserving stdout for Virga's result. A failed command stops setup;
+Virga retains the branch and worktree and reports the partial result.
+
+Setup commands run for `virga new`, including with `--no-tmux`, and for
+`virga open` only when it creates a missing worktree. They do not rerun when
+`virga open` reuses an existing worktree.
+
 The `virga new` lifecycle is:
 
 1. Create the branch and worktree.
 2. Copy or link configured files.
-3. Create the tmux session.
-4. Attach to tmux when appropriate.
+3. Run configured setup commands.
+4. Create the tmux session.
+5. Attach to tmux when appropriate.
 
 ### tmux sessions
 
@@ -146,6 +168,7 @@ tmux:
 virga new feature/login --config ./local.virga.yaml
 ```
 
-Pane commands execute project-controlled code in the new worktree. File entries
-can copy or link sensitive local files into that worktree. Review repository
-configuration before running `virga new` in repositories you do not trust.
+Setup and pane commands execute project-controlled code in the new worktree.
+File entries can copy or link sensitive local files into that worktree. Review
+repository configuration before running `virga new` in repositories you do not
+trust.

@@ -23,6 +23,7 @@ const environmentConfigPath = "VIRGA_CONFIG"
 type Config struct {
 	Tmux  TmuxConfig
 	Files []files.Entry
+	Setup SetupConfig
 }
 
 // Inspector finds the Git worktree containing a directory.
@@ -89,7 +90,7 @@ type configSource struct {
 
 // Load reads configuration for dir. User configuration is loaded first,
 // followed by .virga.yaml at the primary worktree root, a VIRGA_CONFIG file,
-// and explicitPath. Later sources replace earlier tmux and files
+// and explicitPath. Later sources replace earlier tmux, files, and setup
 // configuration. User and repository configuration files are optional;
 // VIRGA_CONFIG and explicitPath must name files that exist.
 func (loader Loader) Load(ctx context.Context, dir, explicitPath string) (Config, error) {
@@ -214,6 +215,9 @@ func mergeRawConfig(base *rawConfig, overlay rawConfig) {
 	if overlay.Files != nil {
 		base.Files = overlay.Files
 	}
+	if overlay.Setup != nil {
+		base.Setup = overlay.Setup
+	}
 }
 
 func validate(raw rawConfig) (Config, error) {
@@ -229,6 +233,17 @@ func validate(raw rawConfig) (Config, error) {
 				return Config{}, fmt.Errorf("validate files[%d] %q: mode must be %q or %q", index, entry.Source, files.ModeCopy, files.ModeSymlink)
 			}
 			configuration.Files[index] = files.Entry{Source: entry.Source, Mode: mode}
+		}
+	}
+
+	if raw.Setup != nil {
+		configuration.Setup.Commands = make([]string, len(raw.Setup.Commands))
+		for index, command := range raw.Setup.Commands {
+			command = strings.TrimSpace(command)
+			if command == "" {
+				return Config{}, fmt.Errorf("validate setup.commands[%d]: command is required", index)
+			}
+			configuration.Setup.Commands[index] = command
 		}
 	}
 

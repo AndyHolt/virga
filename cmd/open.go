@@ -8,6 +8,7 @@ import (
 	"github.com/AndyHolt/virga/internal/config"
 	"github.com/AndyHolt/virga/internal/files"
 	"github.com/AndyHolt/virga/internal/git"
+	"github.com/AndyHolt/virga/internal/setup"
 	"github.com/AndyHolt/virga/internal/tmux"
 	"github.com/spf13/cobra"
 )
@@ -23,6 +24,7 @@ type openWorktreeOptions struct {
 	isInteractive     terminalDetector
 	loadConfiguration configurationLoader
 	materialiseFiles  fileMaterialiser
+	runSetup          setupRunner
 	ensureSession     tmuxSessionEnsurer
 	attachSession     tmuxSessionAttacher
 }
@@ -70,7 +72,8 @@ func newOpenCmd(getwd func() (string, error), options openWorktreeOptions) *cobr
 			setupTmux := !noTmux
 			createdWorktree := !found
 			materialiseFiles := createdWorktree && options.materialiseFiles != nil
-			needsConfiguration := setupTmux || materialiseFiles
+			runSetup := createdWorktree && options.runSetup != nil
+			needsConfiguration := setupTmux || materialiseFiles || runSetup
 
 			if createdWorktree {
 				if options.addWorktree == nil {
@@ -122,6 +125,16 @@ func newOpenCmd(getwd func() (string, error), options openWorktreeOptions) *cobr
 					Entries:        configuration.Files,
 				}); err != nil {
 					return fmt.Errorf("created worktree for branch %q at %q, but materialise files: %w", branch, worktree.Path, err)
+				}
+			}
+			if runSetup && len(configuration.Setup.Commands) > 0 {
+				if err := options.runSetup(cmd.Context(), setup.Options{
+					WorktreeRoot: worktree.Path,
+					Commands:     configuration.Setup.Commands,
+					Stdout:       cmd.ErrOrStderr(),
+					Stderr:       cmd.ErrOrStderr(),
+				}); err != nil {
+					return fmt.Errorf("created worktree for branch %q at %q, but run setup commands: %w", branch, worktree.Path, err)
 				}
 			}
 

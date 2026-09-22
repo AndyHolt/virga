@@ -13,6 +13,7 @@ import (
 	"github.com/AndyHolt/virga/internal/config"
 	"github.com/AndyHolt/virga/internal/files"
 	"github.com/AndyHolt/virga/internal/git"
+	"github.com/AndyHolt/virga/internal/setup"
 	"github.com/AndyHolt/virga/internal/tmux"
 )
 
@@ -174,6 +175,7 @@ func TestNewWorktreeCommandMaterialisesFilesBeforeTmuxSession(t *testing.T) {
 	var order []string
 	configuration := config.Config{
 		Files: []files.Entry{{Source: ".env", Mode: files.ModeSymlink}},
+		Setup: config.SetupConfig{Commands: []string{"uv sync"}},
 		Tmux: config.TmuxConfig{Windows: []config.TmuxWindow{{
 			Name:  "editor",
 			Panes: []config.TmuxPane{{Command: "test -f .env"}},
@@ -202,6 +204,13 @@ func TestNewWorktreeCommandMaterialisesFilesBeforeTmuxSession(t *testing.T) {
 				}
 				return nil
 			},
+			runSetup: func(_ context.Context, options setup.Options) error {
+				order = append(order, "run setup")
+				if options.WorktreeRoot != "/worktrees/repo_feature" || !reflect.DeepEqual(options.Commands, configuration.Setup.Commands) {
+					t.Errorf("setup options = %#v, want worktree and commands", options)
+				}
+				return nil
+			},
 			createSession: func(context.Context, tmux.CreateSessionOptions) (string, error) {
 				order = append(order, "create tmux")
 				return "repo_feature", nil
@@ -215,7 +224,7 @@ func TestNewWorktreeCommandMaterialisesFilesBeforeTmuxSession(t *testing.T) {
 	if err := command.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	wantOrder := []string{"create worktree", "materialise files", "create tmux"}
+	wantOrder := []string{"create worktree", "materialise files", "run setup", "create tmux"}
 	if !reflect.DeepEqual(order, wantOrder) {
 		t.Errorf("operation order = %#v, want %#v", order, wantOrder)
 	}
@@ -248,6 +257,36 @@ func TestNewWorktreeCommandReportsFileMaterialisationFailureAfterCreation(t *tes
 	err := command.Execute()
 	if !errors.Is(err, materialiseErr) {
 		t.Fatalf("Execute() error = %v, want wrapped %v", err, materialiseErr)
+	}
+	if !strings.Contains(err.Error(), "created branch \"feature\" and worktree \"/repo_feature\"") {
+		t.Fatalf("Execute() error = %v, want created resources", err)
+	}
+}
+
+func TestNewWorktreeCommandReportsSetupFailureAfterCreation(t *testing.T) {
+	setupErr := errors.New("uv sync failed")
+	command := newWorktreeCmd(
+		func() (string, error) { return "/repo", nil },
+		func(context.Context, string, string, string) (string, error) { return "/repo_feature", nil },
+		newWorktreeOptions{
+			inspect: func(context.Context, string) (git.WorktreeInfo, error) {
+				return git.WorktreeInfo{Kind: git.MainWorktree, WorktreeRoot: "/repo", MainWorktreeRoot: "/repo"}, nil
+			},
+			loadConfiguration: func(context.Context, string, string) (config.Config, error) {
+				return config.Config{Setup: config.SetupConfig{Commands: []string{"uv sync"}}}, nil
+			},
+			runSetup: func(context.Context, setup.Options) error { return setupErr },
+			createSession: func(context.Context, tmux.CreateSessionOptions) (string, error) {
+				t.Fatal("tmux session created after setup failure")
+				return "", nil
+			},
+		},
+	)
+	command.SetArgs([]string{"feature"})
+
+	err := command.Execute()
+	if !errors.Is(err, setupErr) {
+		t.Fatalf("Execute() error = %v, want wrapped %v", err, setupErr)
 	}
 	if !strings.Contains(err.Error(), "created branch \"feature\" and worktree \"/repo_feature\"") {
 		t.Fatalf("Execute() error = %v, want created resources", err)
@@ -342,6 +381,41 @@ func TestNewWorktreeCommandNoTmuxStillMaterialisesFiles(t *testing.T) {
 	}
 	if !materialised {
 		t.Fatal("files were not materialised")
+	}
+}
+
+func TestNewWorktreeCommandRunsSetupWithoutTmux(t *testing.T) {
+	setupRan := false
+	command := newWorktreeCmd(
+		func() (string, error) { return "/repo", nil },
+		func(context.Context, string, string, string) (string, error) { return "/repo_feature", nil },
+		newWorktreeOptions{
+			inspect: func(context.Context, string) (git.WorktreeInfo, error) {
+				return git.WorktreeInfo{Kind: git.MainWorktree, WorktreeRoot: "/repo", MainWorktreeRoot: "/repo"}, nil
+			},
+			loadConfiguration: func(context.Context, string, string) (config.Config, error) {
+				return config.Config{Setup: config.SetupConfig{Commands: []string{"uv sync"}}}, nil
+			},
+			runSetup: func(_ context.Context, options setup.Options) error {
+				setupRan = true
+				if options.WorktreeRoot != "/repo_feature" {
+					t.Errorf("worktree root = %q, want /repo_feature", options.WorktreeRoot)
+				}
+				return nil
+			},
+			createSession: func(context.Context, tmux.CreateSessionOptions) (string, error) {
+				t.Fatal("tmux session created with --no-tmux")
+				return "", nil
+			},
+		},
+	)
+	command.SetArgs([]string{"feature", "--no-tmux"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !setupRan {
+		t.Fatal("setup commands were not run")
 	}
 }
 
